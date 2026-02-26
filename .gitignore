@@ -1,3 +1,4 @@
 /.claude
 /idr_model/__pycache__
 /.pytest_cache
+/idr_model/tests/__pycache__
