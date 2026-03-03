@@ -3,3 +3,4 @@
 /.pytest_cache
 /idr_model/tests/__pycache__
 uv.lock
+.venv
