@@ -190,5 +190,69 @@ def test_high_freq_limit():
     assert np.all(result["v"] >= -1e-10)
 
 
+# ─── 5.7 ИДР-режим: ионизационный баланс при параметрах по умолчанию ─────────
+def test_idr_ionization_regime():
+    """
+    При параметрах конфига (аргон, 133 Па, H_wall = 100 000 А/м) решение должно
+    находиться в ИДР-режиме:
+
+      νi_max  >>  Da · λ₁  (минимальный критерий соответствия статье)
+
+    Это гарантирует, что ионизация играет роль в формировании профиля σ,
+    а не только амбиполярная диффузия.
+
+    Дополнительно проверяем, что профиль σ/σ₀ является более плоским в ядре,
+    чем J₀ — характерный признак ИДР (ионизация сосредоточена у стенки,
+    диффузия заполняет объём).
+    """
+    from config import P_PA, R_TUBE, H_WALL
+    from physics import ambipolar_diffusion, ionization_freq, effective_field
+    from config import OMEGA
+    import numpy as np
+
+    MU_0 = 4.0 * np.pi * 1e-7
+
+    # Диффузионные потери: Da · λ₁²
+    Da0 = ambipolar_diffusion(0.0, P_PA)
+    lambda1_sq = (2.4048 / R_TUBE) ** 2
+    loss_rate = Da0 * lambda1_sq   # с⁻¹
+
+    # Ионизация у стенки (оценка по равномерному H)
+    E_wall_est = OMEGA * MU_0 * H_WALL * R_TUBE / 2.0
+    E_eff_wall = effective_field(E_wall_est, P_PA)
+    nu_i_wall = ionization_freq(E_eff_wall, P_PA)
+
+    assert nu_i_wall > loss_rate, (
+        f"Нет ИДР-режима при H_wall={H_WALL:.0f} А/м: "
+        f"νi_wall={nu_i_wall:.3e} с⁻¹ ≤ Da·λ₁={loss_rate:.3e} с⁻¹. "
+        f"Увеличьте H_WALL — должно быть νi >> Da·λ₁."
+    )
+
+    # Запуск решателя и проверка профиля
+    result = solve_idr(N=100, R=R_TUBE, p_pa=P_PA,
+                       H_wall=H_WALL, max_iter=500, tol=1e-6, relax=0.5)
+    r   = result["r"]
+    rn  = r / R_TUBE
+    sa  = result["sigma_a"]
+    s0  = sa[0] if sa[0] > 0 else 1.0
+
+    # Значение σ/σ₀ на r/R = 0.5 (середина)
+    sa_mid = float(np.interp(0.5, rn, sa / s0))
+
+    try:
+        from scipy.special import j0 as scipy_j0
+        j0_mid = float(scipy_j0(2.4048 * 0.5))   # ≈ 0.672
+    except ImportError:
+        j0_mid = 0.672
+
+    # ИДР-профиль должен быть более плоским в ядре (σ/σ₀ при r/R=0.5 > J₀):
+    # при νi >> Da·λ₁ ионизация у стенки «выравнивает» профиль
+    assert sa_mid > j0_mid, (
+        f"ИДР-профиль не более плоский, чем J₀ в ядре: "
+        f"σ/σ₀(0.5)={sa_mid:.3f}, J₀(0.5)={j0_mid:.3f}. "
+        f"Проверьте формирование ИДР-режима."
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
