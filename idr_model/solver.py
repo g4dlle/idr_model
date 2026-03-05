@@ -108,7 +108,8 @@ def compute_alpha(sigma_a, sigma_p):
 # ---------------------------------------------------------------------------
 
 def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
-              max_iter=MAX_ITER, tol=TOL, relax=RELAX, dt=None, verbose=False):
+              max_iter=MAX_ITER, tol=TOL, relax=RELAX, dt=None,
+              r_inc=0.0, verbose=False):
     """
     Iterative solver for the 1D IDR model.
 
@@ -124,8 +125,10 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
     relax    : under-relaxation for H field (0 < relax <= 1)
     dt       : pseudo-time step [s] for sigma equation.
                None  → power iteration + self-consistent normalisation (default).
-               float → IMEX time-stepping; amplitude evolves to physical equilibrium
-                       where ν_i = λ₁·Da (no external normalisation imposed).
+               float → IMEX time-stepping.
+    r_inc    : inner radius of conducting inclusion [m].
+               0.0   → standard geometry (full cylinder, axis at r=0).
+               > 0   → annular geometry r ∈ [r_inc, R].
     verbose  : print residuals if True
 
     Returns
@@ -133,15 +136,23 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
     dict with keys: r, u (|H|^2), v (|E|^2), sigma_a, sigma_p,
                     n_e, Da, nu_i, converged, n_iter, residuals
     """
-    r, h = make_grid(N, R)
+    r, h = make_grid(N, R, r_min=r_inc)
+    annular = r_inc > 0  # кольцевая геометрия
 
     # Initialisation
     sigma_a0, sigma_p0, _ = conductivity(n_e0, p_pa)
-    # Bessel-like initial profile: sigma ~ (1 - (r/R)^2)
-    profile = np.maximum(1.0 - (r / R)**2, 0.0)
+    if annular:
+        # Парабола в [r_inc, R] с нулями на обеих стенках
+        profile = (r - r_inc) * (R - r) / ((R - r_inc) / 2.0)**2
+        profile = np.maximum(profile, 0.0)
+    else:
+        # Bessel-like initial profile: sigma ~ (1 - (r/R)^2)
+        profile = np.maximum(1.0 - (r / R)**2, 0.0)
     sigma_a = sigma_a0 * profile
+    sigma_a[0] = 0.0 if annular else sigma_a[0]
     sigma_a[-1] = 0.0
     sigma_p = sigma_p0 * profile
+    sigma_p[0] = 0.0 if annular else sigma_p[0]
     sigma_p[-1] = 0.0
 
     u = np.zeros(N + 1)
@@ -164,15 +175,16 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
         u_new = np.maximum(u_new, 0.0)
 
         # Step b: compute |E_phi|^2 from Faraday's law (integral form)
-        # E_phi(r) = omega*mu0/r * integral_0^r H(r')*r' dr'
-        # where H(r) = sqrt(|H|^2) = sqrt(u)
+        # E_phi(r) = omega*mu0/r * integral_{r_start}^r H(r')*r' dr'
+        # r_start = r_inc (annular) or 0 (full cylinder)
+        # At r_start: E_phi = 0 (conductor surface or axis)
         H_abs = np.sqrt(np.maximum(u_new, 0.0))
         integrand = H_abs * r           # H(r') * r'
         # cumulative trapezoidal integral on uniform grid
         intervals = 0.5 * h * (integrand[:-1] + integrand[1:])
         integrals = np.zeros(N + 1)
         integrals[1:] = np.cumsum(intervals)
-        # v[0] = 0 by symmetry (E_phi -> 0 as r -> 0)
+        # v[0] = 0 (E_phi = 0 at r_inc or axis)
         v_new = np.zeros(N + 1)
         v_new[1:] = (OMEGA * MU_0 * integrals[1:] / r[1:])**2
 
@@ -195,6 +207,8 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
                                                   sigma_a_ref=sigma_a, dt=dt)
             sigma_a_new = thomas_solve(l, m, up, rhs)
             sigma_a_new = np.maximum(sigma_a_new, 0.0)
+            if annular:
+                sigma_a_new[0] = 0.0   # рекомбинация на включении
             apply_wall_sigma(sigma_a_new)
             _, sigma_p_new, _ = conductivity(ne_from_sigma(sigma_a_new, p_pa), p_pa)
             # Нет под-релаксации: шаг dt уже контролирует скорость изменения
@@ -213,6 +227,8 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             l, m, up, rhs = build_sigma_equation(r, h, Da, nu_i, sigma_a_ref=sigma_a)
             sigma_raw = thomas_solve(l, m, up, rhs)
             sigma_raw = np.maximum(sigma_raw, 0.0)
+            if annular:
+                sigma_raw[0] = 0.0     # рекомбинация на включении
             apply_wall_sigma(sigma_raw)
 
             n_e_raw = sigma_raw

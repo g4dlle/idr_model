@@ -1,3 +1,4 @@
+
 """
 boundary.py — граничные условия для 1D модели ИДР.
 
@@ -58,6 +59,42 @@ def apply_axis_sigma(sigma: np.ndarray) -> None:
     """
     pass  # обрабатывается в equations.py через ghost node
 
+
+# ─── Граничные условия на поверхности проводящего включения (r = r_inc) ───────
+
+def apply_inclusion_E(v: np.ndarray) -> None:
+    """
+    |E|² = 0 на поверхности проводника (r = r_inc).
+
+    Электрическое поле не проникает внутрь идеального проводника.
+    Граничное условие Дирихле: v[0] = 0.
+    """
+    v[0] = 0.0
+
+
+def apply_inclusion_sigma(sigma: np.ndarray) -> None:
+    """
+    σ = 0 на поверхности проводника (r = r_inc).
+
+    Рекомбинация носителей на проводящей поверхности.
+    Граничное условие Дирихле: sigma[0] = 0.
+    """
+    sigma[0] = 0.0
+
+
+def apply_inclusion_H(u: np.ndarray, H_inc: float | None = None) -> None:
+    """
+    Граничное условие для |H|² на поверхности включения (r = r_inc).
+
+    Parameters
+    ----------
+    u     : массив |H|² (N+1 узлов)
+    H_inc : амплитуда H на включении [А/м].
+            None → условие Неймана dH/dr=0 (обрабатывается в equations.py).
+            Число → Дирихле: u[0] = H_inc².
+    """
+    if H_inc is not None:
+        u[0] = H_inc**2
 
 def apply_wall_H(u: np.ndarray, H_wall: float = H_WALL) -> None:
     """
