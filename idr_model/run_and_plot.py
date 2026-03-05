@@ -36,11 +36,21 @@ from postprocess import (
 from config import P_PA, R_TUBE, H_WALL, N_GRID
 
 
+def _resolve_save_dir(save_dir):
+    if save_dir is None:
+        return None
+    if os.path.isabs(save_dir):
+        return save_dir
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, save_dir)
+
+
 def main(save_dir=None):
+    output_dir = _resolve_save_dir(save_dir)
     # ── Create output directory ──────────────────────────────────────────────
-    if save_dir:
-        os.makedirs(save_dir, exist_ok=True)
-        def path(name): return os.path.join(save_dir, name)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        def path(name): return os.path.join(output_dir, name)
     else:
         def path(_): return None   # show interactively
 
@@ -159,8 +169,8 @@ def main(save_dir=None):
         save=path("fig7_convergence.png"),
     )
 
-    if save_dir:
-        print(f"\nAll figures saved to: {os.path.abspath(save_dir)}/")
+    if output_dir:
+        print(f"\nAll figures saved to: {os.path.abspath(output_dir)}/")
     else:
         print("\nDone.")
 

@@ -3,5 +3,5 @@
 /.pytest_cache
 /idr_model/tests/__pycache__
 uv.lock
+.vscode
 .venv
-ARTICLE_VALIDATION.md
