@@ -35,22 +35,23 @@ import numpy as np
 # Вспомогательные функции
 # ─────────────────────────────────────────────────────────────────────────────
 
-def make_grid(N: int, R: float) -> tuple[np.ndarray, float]:
+def make_grid(N: int, R: float, r_min: float = 0.0) -> tuple[np.ndarray, float]:
     """
     Равномерная сетка по r.
 
     Parameters
     ----------
-    N : число интервалов (узлов N+1: r_0=0, r_N=R)
-    R : радиус трубки [м]
+    N     : число интервалов (узлов N+1)
+    R     : внешний радиус [м]
+    r_min : внутренний радиус [м] (0 — полный цилиндр, >0 — кольцо)
 
     Returns
     -------
-    r : массив узлов (N+1,)
+    r : массив узлов (N+1,), от r_min до R
     h : шаг сетки [м]
     """
-    r = np.linspace(0.0, R, N + 1)
-    h = R / N
+    r = np.linspace(r_min, R, N + 1)
+    h = (R - r_min) / N
     return r, h
 
 
@@ -125,15 +126,23 @@ def build_H_equation(r: np.ndarray, h: float,
         main[i]  = -coef * (rp * ap + rm * am)
         rhs[i]   = 2.0 * sigma_a[i] * v[i]
 
-    # ── Особая точка i = 0: правило Лопиталя ─────────────────────────────────
-    # lim_{r→0} (1/r)·d/dr(r·α·u') = 2·α_{1/2}·(u_1 - u_0)/h²
-    # Уравнение: 2α_{1/2}/h²·(u_1 - u_0) = 2σ_a[0]·v[0]
-    # → main·u_0 + upper·u_1 = rhs  с main = -2α/h², upper = +2α/h²
-    ap0 = alpha_half[0]
-    main[0]  = -2.0 * ap0 / h**2
-    upper[0] =  2.0 * ap0 / h**2
-    rhs[0]   =  2.0 * sigma_a[0] * v[0]
-    lower[0] = 0.0   # ghost node даёт симметрию: u[-1]=u[1] → нижний = верхний
+    # ── Узел i = 0 ─────────────────────────────────────────────────────────────
+    if r[0] > 0:
+        # Кольцевая геометрия: r[0] = r_inc > 0.
+        # ГУ Неймана du/dr = 0 на внутренней стенке:
+        # Одностороння разность: (u[1] - u[0])/h = 0  → u[0] = u[1]
+        lower[0] = 0.0
+        main[0]  = 1.0
+        upper[0] = -1.0
+        rhs[0]   = 0.0
+    else:
+        # Особая точка r=0: правило Лопиталя
+        # lim_{r→0} (1/r)·d/dr(r·α·u') = 2·α_{1/2}·(u_1 - u_0)/h²
+        ap0 = alpha_half[0]
+        main[0]  = -2.0 * ap0 / h**2
+        upper[0] =  2.0 * ap0 / h**2
+        rhs[0]   =  2.0 * sigma_a[0] * v[0]
+        lower[0] = 0.0   # ghost node: u[-1]=u[1]
 
     # ── Граничное условие r=R (Дирихле) ──────────────────────────────────────
     lower[N] = 0.0
@@ -188,7 +197,10 @@ def build_E_equation(r: np.ndarray, h: float,
 
     alpha_half = half_node_avg(alpha)
 
-    # ── Граничное условие r=0 (Дирихле v=0) ──────────────────────────────────
+    # ── Граничное условие i=0: Дирихле v=0 ────────────────────────────────────
+    # При r[0]=0 (ось): E_φ=0 по симметрии.
+    # При r[0]>0 (включение): E_φ=0 на проводнике.
+    # В обоих случаях: v[0] = 0.
     main[0]  = 1.0
     upper[0] = 0.0
     rhs[0]   = 0.0
@@ -290,19 +302,26 @@ def build_sigma_equation(r: np.ndarray, h: float,
     time_step   = power_iter and (dt is not None)
     inv_dt      = 1.0 / dt if time_step else 0.0
 
-    # ── Особая точка i = 0 (правило Лопиталя) ────────────────────────────────
-    Dp0 = Da_half[0]
-    if power_iter:
-        main[0]  =  2.0 * Dp0 / h**2 + inv_dt
-        if time_step:
-            # IMEX: диффузия неявная, ионизация явная
-            rhs[0] = sigma_a_ref[0] * (inv_dt + nu_i[0])
-        else:
-            rhs[0] = nu_i[0] * sigma_a_ref[0]
-    else:
-        main[0]  =  2.0 * Dp0 / h**2 - nu_i[0]
+    # ── Узел i = 0 ────────────────────────────────────────────────────────────
+    if r[0] > 0:
+        # Кольцевая геометрия: σ(r_inc) = 0 (Дирихле — рекомбинация)
+        lower[0] = 0.0
+        main[0]  = 1.0
+        upper[0] = 0.0
         rhs[0]   = 0.0
-    upper[0] = -2.0 * Dp0 / h**2
+    else:
+        # Особая точка r=0: правило Лопиталя
+        Dp0 = Da_half[0]
+        if power_iter:
+            main[0]  =  2.0 * Dp0 / h**2 + inv_dt
+            if time_step:
+                rhs[0] = sigma_a_ref[0] * (inv_dt + nu_i[0])
+            else:
+                rhs[0] = nu_i[0] * sigma_a_ref[0]
+        else:
+            main[0]  =  2.0 * Dp0 / h**2 - nu_i[0]
+            rhs[0]   = 0.0
+        upper[0] = -2.0 * Dp0 / h**2
 
     # ── Внутренние узлы i = 1 .. N-1 ─────────────────────────────────────────
     for i in range(1, N):
