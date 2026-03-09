@@ -1,0 +1,64 @@
+BOLSIG+ script file: input_ar_10000Pa.dat
+READCOLLISIONS
+Ar
+SigloDataBase-LXCat-04Jun2013.txt
+How to reference in publications:
+1) Yamabe, Buckman, and Phelps, Phys. Rev. 27, 1345 (1983). Revised Oct 1997
+2) PHELPS database,http://www.lxcat.laplace.univ-tlse.fr, retrieved June 4, 2013.
+C1    Ar    Effective (momentum)                                
+C2    Ar    Excitation    11.50 eV                              
+C3    Ar    Ionization    15.80 eV                              
+RUNSERIES
+R1    0.1000 Td    0.788 eV                                     
+R2    0.121 Td    0.863 eV                                      
+R3    0.146 Td    0.946 eV                                      
+R4    0.176 Td    1.04 eV                                       
+R5    0.212 Td    1.14 eV                                       
+R6    0.256 Td    1.26 eV                                       
+R7    0.309 Td    1.38 eV                                       
+R8    0.373 Td    1.51 eV                                       
+R9    0.450 Td    1.66 eV                                       
+R10   0.543 Td    1.82 eV                                       
+R11   0.655 Td    2.00 eV                                       
+R12   0.791 Td    2.19 eV                                       
+R13   0.954 Td    2.41 eV                                       
+R14   1.15 Td    2.64 eV                                        
+R15   1.39 Td    2.90 eV                                        
+R16   1.68 Td    3.18 eV                                        
+R17   2.02 Td    3.49 eV                                        
+R18   2.44 Td    3.82 eV                                        
+R19   2.95 Td    4.17 eV                                        
+R20   3.56 Td    4.53 eV                                        
+R21   4.29 Td    4.84 eV                                        
+R22   5.18 Td    5.06 eV                                        
+R23   6.25 Td    5.19 eV                                        
+R24   7.54 Td    5.28 eV                                        
+R25   9.10 Td    5.34 eV                                        
+R26   11.0 Td    5.40 eV                                        
+R27   13.3 Td    5.47 eV                                        
+R28   16.0 Td    5.54 eV                                        
+R29   19.3 Td    5.63 eV                                        
+R30   23.3 Td    5.73 eV                                        
+R31   28.1 Td    5.84 eV                                        
+R32   33.9 Td    5.96 eV                                        
+R33   40.9 Td    6.10 eV                                        
+R34   49.4 Td    6.25 eV                                        
+R35   59.6 Td    6.41 eV                                        
+R36   72.0 Td    6.59 eV                                        
+R37   86.9 Td    6.79 eV                                        
+R38   105. Td    7.00 eV                                        
+R39   126. Td    7.23 eV                                        
+R40   153. Td    7.48 eV                                        
+R41   184. Td    7.77 eV                                        
+R42   222. Td    8.09 eV                                        
+R43   268. Td    8.47 eV                                        
+R44   324. Td    8.92 eV                                        
+R45   391. Td    9.45 eV                                        
+R46   471. Td    10.1 eV                                        
+R47   569. Td    10.9 eV                                        
+R48   687. Td    12.0 eV                                        
+R49   829. Td    13.3 eV                                        
+R50   1000. Td    15.1 eV                                       
+SAVERESULTS
+bolsig_ar_10000Pa.dat
+FINISHED

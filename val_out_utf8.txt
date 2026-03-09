@@ -1,0 +1,48 @@
+﻿  [bolsig] WARNING: C:\Projects\idr_model\bolsigplus072024-win\bolsig_ar_1000Pa.dat not found, using analytical formulas for p = 1000.0 Pa
+  [bolsig] WARNING: C:\Projects\idr_model\bolsigplus072024-win\bolsig_ar_5000Pa.dat not found, using analytical formulas for p = 5000.0 Pa
+  [bolsig] WARNING: C:\Projects\idr_model\bolsigplus072024-win\bolsig_ar_10000Pa.dat not found, using analytical formulas for p = 10000.0 Pa
+========================================================================
+  IDR Model Validation
+========================================================================
+  Geometry: R = 0.75 mm, f = 1.76 MHz
+  Transport: BOLSIG+
+.venv\Scripts\python.exe : Traceback (most recent call la
+st):
+строка:1 знак:1
++ .venv\Scripts\python.exe idr_model/run_validation.py --
+bolsig --beta  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback ( 
+   most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Projects\idr_model\idr_model\run_validation.py
+", line 323, in <module>
+    main()
+    ~~~~^^
+  File "C:\Projects\idr_model\idr_model\run_validation.py
+", line 314, in main
+    run_validation(
+    ~~~~~~~~~~~~~~^
+        use_bolsig=args.bolsig,
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        verbose=args.verbose,
+        ^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Projects\idr_model\idr_model\run_validation.py
+", line 163, in run_validation
+    print(f"  Recombination: beta = {beta_recomb:.2e} m\x
+b3/s")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^
+  File "C:\Users\kuval\AppData\Local\Python\pythoncore-3.
+14-64\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encodi
+ng_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characte
+r '\xb3' in position 34: character maps to <undefined>

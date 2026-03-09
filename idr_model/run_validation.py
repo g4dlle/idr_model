@@ -160,7 +160,7 @@ def run_validation(use_bolsig=False, beta_recomb=0.0, save_dir=None,
     print("=" * 72)
     print(f"  Geometry: R = {JET_RADIUS*1e3:.2f} mm, f = {FREQUENCY_HZ/1e6:.2f} MHz")
     print(f"  Transport: {'BOLSIG+' if use_bolsig else 'analytical (Abdullin-Zheltukhin 1985)'}")
-    print(f"  Recombination: β = {beta_recomb:.2e} m³/s")
+    print(f"  Recombination: beta = {beta_recomb:.2e} m^3/s")
     print("=" * 72)
     print()
 
@@ -199,8 +199,8 @@ def run_validation(use_bolsig=False, beta_recomb=0.0, save_dir=None,
         }
 
         print(f"    converged: {result['converged']} ({result['n_iter']} iter)")
-        print(f"    ne_model(0) = {ne_model:.3e} m⁻³  ({ne_model/1e6:.3e} cm⁻³)")
-        print(f"    ne_exp       = {ne_exp_m3:.3e} m⁻³  ({ne_exp_cm3:.3e} cm⁻³)")
+        print(f"    ne_model(0) = {ne_model:.3e} m^-3  ({ne_model/1e6:.3e} cm^-3)")
+        print(f"    ne_exp       = {ne_exp_m3:.3e} m^-3  ({ne_exp_cm3:.3e} cm^-3)")
         if ne_exp_m3 > 0:
             ratio = ne_model / ne_exp_m3
             print(f"    ratio ne_model/ne_exp = {ratio:.3f}")
@@ -210,7 +210,7 @@ def run_validation(use_bolsig=False, beta_recomb=0.0, save_dir=None,
     print("=" * 72)
     print("  Summary Table")
     print("-" * 72)
-    print(f"  {'p [Pa]':>10} | {'ne_model [cm⁻³]':>16} | {'ne_exp [cm⁻³]':>14} | "
+    print(f"  {'p [Pa]':>10} | {'ne_model [cm^-3]':>16} | {'ne_exp [cm^-3]':>14} | "
           f"{'ratio':>8} | {'conv':>5} | {'regime'}")
     print("-" * 72)
 
@@ -257,7 +257,7 @@ def _plot_validation(results, pressures, exp_by_p,
     ax1.set_xlabel("Pressure [kPa]", fontsize=12)
     ax1.set_ylabel("$n_e$ [cm$^{-3}$]", fontsize=12)
     transport_label = "BOLSIG+" if use_bolsig else "analytical"
-    beta_label = f", β={beta_recomb:.0e}" if beta_recomb > 0 else ""
+    beta_label = f", beta={beta_recomb:.0e}" if beta_recomb > 0 else ""
     ax1.set_title(f"Electron density vs pressure\n({transport_label}{beta_label})")
     ax1.legend(fontsize=10)
     ax1.grid(True, alpha=0.3)
