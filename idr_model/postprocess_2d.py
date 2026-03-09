@@ -200,3 +200,124 @@ def plot_convergence_2d(result, tol=None, save=None):
         ax.legend()
     fig.tight_layout()
     _save_or_show(fig, save)
+
+
+# ---------------------------------------------------------------------------
+# Midplane sigma/sigma_0 for several inclusion radii
+# ---------------------------------------------------------------------------
+
+_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#ff7f0e",
+           "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"]
+
+
+def plot_midplane_inclusion(results, labels=None,
+                            sigma_0_list=None,
+                            title=None, save=None):
+    """
+    Plot sigma_a / sigma_0 at z = L/2 for several 2D results
+    (typically different inclusion radii).
+
+    Parameters
+    ----------
+    results      : list of dicts from solve_idr_2d
+    labels       : curve labels
+    sigma_0_list : reference sigma_0 per curve (None → use midplane max)
+    title        : figure title
+    save         : file path, None → show
+    """
+    if not HAS_MPL:
+        return
+    _apply_style()
+
+    if isinstance(results, dict):
+        results = [results]
+    if labels is None:
+        labels = [f"curve {i+1}" for i in range(len(results))]
+    if sigma_0_list is None:
+        sigma_0_list = [None] * len(results)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    for i, (res, lbl, s0) in enumerate(zip(results, labels, sigma_0_list)):
+        r = res["r"]
+        z = res["z"]
+        R = r[-1]
+        rn = r / R
+        j_mid = len(z) // 2
+        sa_mid = res["sigma_a"][:, j_mid]
+
+        if s0 is None or s0 == 0.0:
+            s0 = sa_mid[0] if sa_mid[0] > 0 else float(np.max(sa_mid))
+        if s0 <= 0.0:
+            s0 = 1.0
+
+        ax.plot(rn, sa_mid / s0,
+                color=_COLORS[i % len(_COLORS)],
+                lw=2, label=lbl, zorder=3)
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel("r / R", fontsize=12)
+    ax.set_ylabel(r"$\sigma_a / \sigma_0$", fontsize=12)
+    if title is None:
+        title = r"Нормированная проводимость $\sigma / \sigma_0$  (2D, midplane)"
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+    _save_or_show(fig, save)
+
+
+# ---------------------------------------------------------------------------
+# Side-by-side field comparison at midplane
+# ---------------------------------------------------------------------------
+
+def plot_fields_comparison_2d(results, labels=None,
+                               title="Поля на средней плоскости (2D)",
+                               save=None):
+    """
+    Three subplots: |H|², |E|², sigma_a at z = L/2 for several 2D solutions.
+
+    Parameters
+    ----------
+    results : list of dicts from solve_idr_2d
+    labels  : curve labels
+    title   : figure title
+    save    : file path, None → show
+    """
+    if not HAS_MPL:
+        return
+    _apply_style()
+
+    if isinstance(results, dict):
+        results = [results]
+    if labels is None:
+        labels = [f"#{i+1}" for i in range(len(results))]
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+
+    for i, (res, lbl) in enumerate(zip(results, labels)):
+        r = res["r"]
+        z = res["z"]
+        rn = r / r[-1]
+        j_mid = len(z) // 2
+        c = _COLORS[i % len(_COLORS)]
+
+        axes[0].plot(rn, res["u"][:, j_mid],       color=c, lw=2, label=lbl)
+        axes[1].plot(rn, res["v"][:, j_mid],       color=c, lw=2, label=lbl)
+        axes[2].plot(rn, res["sigma_a"][:, j_mid], color=c, lw=2, label=lbl)
+
+    ylabels = [r"$|H|^2$  [A$^2$/m$^2$]",
+               r"$|E|^2$  [V$^2$/m$^2$]",
+               r"$\sigma_a$  [S/m]"]
+    subtitles = [r"$|H|^2(r)$", r"$|E|^2(r)$", r"$\sigma_a(r)$"]
+
+    for ax, yl, st in zip(axes, ylabels, subtitles):
+        ax.set_xlabel("r / R")
+        ax.set_ylabel(yl)
+        ax.set_title(st)
+        ax.set_xlim(0, 1)
+        ax.legend(fontsize=9)
+
+    fig.tight_layout()
+    _save_or_show(fig, save)
