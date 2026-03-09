@@ -53,8 +53,8 @@ class TestParserStructure:
         assert len(unique_lengths) == 1, f"Массивы имеют разную длину: {lengths}"
 
     def test_correct_number_of_points(self, parsed_data):
-        """Mock-файл содержит 13 точек E/N."""
-        assert len(parsed_data["E_N_Td"]) == 13
+        """Mock-файл содержит 50 точек E/N."""
+        assert len(parsed_data["E_N_Td"]) == 50
 
 
 # ── Физические ограничения на значения ───────────────────────────────────────

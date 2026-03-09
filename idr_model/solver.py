@@ -103,6 +103,29 @@ def ne_from_sigma(sigma_a, p_pa, nu_c=None):
     return sigma_a * M_ELECTRON * (nu_c**2 + OMEGA**2) / (E_CHARGE**2 * nu_c)
 
 
+def conductivity_from_ne(n_e, p_pa, nu_c=None):
+    """
+    Compute conductivity components from electron density.
+
+    If nu_c is None, uses analytical conductivity(ne, p_pa).
+    If nu_c is provided (scalar or array), uses it directly.
+    """
+    if nu_c is None:
+        return conductivity(n_e, p_pa)
+
+    n_e = np.asarray(n_e, dtype=float)
+    nu_c = np.asarray(nu_c, dtype=float)
+    if nu_c.ndim == 0:
+        nu_c = np.full_like(n_e, float(nu_c))
+
+    denom = nu_c**2 + OMEGA**2
+    prefactor = n_e * E_CHARGE**2 / M_ELECTRON
+    sigma_a = prefactor * nu_c / denom
+    sigma_p = prefactor * OMEGA / denom
+    sigma_mod2 = sigma_a**2 + sigma_p**2
+    return sigma_a, sigma_p, sigma_mod2
+
+
 def compute_alpha(sigma_a, sigma_p):
     """alpha = sigma_a / |sigma|^2"""
     mod2 = sigma_a**2 + sigma_p**2
@@ -175,6 +198,28 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
     residuals = []
     converged = False
 
+    def _effective_field_with_transport(E_abs):
+        """
+        Solve implicit dependence E_eff(nu_c(E/N)) by fixed-point iterations.
+        Returns (E_eff, nu_c_grid) arrays with the same shape as E_abs.
+        """
+        E_eff = E_abs / np.sqrt(2.0)
+        nu_c_arr = None
+        for _ in range(5):
+            nu_c_arr = np.asarray(transport.collision_freq(E_eff, p_pa), dtype=float)
+            if nu_c_arr.ndim == 0:
+                nu_c_arr = np.full_like(E_eff, float(nu_c_arr))
+            E_eff_new = E_abs / np.sqrt(2.0) * nu_c_arr / np.sqrt(nu_c_arr**2 + OMEGA**2)
+            if np.max(np.abs(E_eff_new - E_eff)) < 1e-6 * (np.max(E_eff) + 1e-30):
+                E_eff = E_eff_new
+                break
+            E_eff = E_eff_new
+        if nu_c_arr is None:
+            nu_c_arr = np.asarray(transport.collision_freq(E_eff, p_pa), dtype=float)
+            if nu_c_arr.ndim == 0:
+                nu_c_arr = np.full_like(E_eff, float(nu_c_arr))
+        return E_eff, nu_c_arr
+
     for iteration in range(max_iter):
 
         # Step a: solve for |H|^2
@@ -204,15 +249,7 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
         # Step c: effective field
         E_abs = np.sqrt(v_new)
         if transport is not None:
-            # Iterative E_eff: nu_c(E/N) creates implicit dependence
-            E_eff = E_abs / np.sqrt(2.0)  # initial guess
-            for _eeff_iter in range(5):
-                nu_c_arr = transport.collision_freq(E_eff, p_pa)
-                E_eff_new = E_abs / np.sqrt(2.0) * nu_c_arr / np.sqrt(nu_c_arr**2 + OMEGA**2)
-                if np.max(np.abs(E_eff_new - E_eff)) < 1e-6 * (np.max(E_eff) + 1e-30):
-                    break
-                E_eff = E_eff_new
-            nu_c_grid = nu_c_arr  # save for ne_from_sigma
+            E_eff, nu_c_grid = _effective_field_with_transport(E_abs)
         else:
             E_eff = effective_field(E_abs, p_pa)
             nu_c_grid = None  # use default in ne_from_sigma
@@ -224,6 +261,10 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             # Ensure array types
             Da   = np.asarray(Da, dtype=float)
             nu_i = np.asarray(nu_i, dtype=float)
+            if Da.ndim == 0:
+                Da = np.full_like(E_eff, float(Da))
+            if nu_i.ndim == 0:
+                nu_i = np.full_like(E_eff, float(nu_i))
         else:
             Da   = ambipolar_diffusion(E_eff, p_pa)
             nu_i = ionization_freq(E_eff, p_pa)
@@ -243,7 +284,11 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             if annular:
                 sigma_a_new[0] = 0.0   # рекомбинация на включении
             apply_wall_sigma(sigma_a_new)
-            _, sigma_p_new, _ = conductivity(ne_from_sigma(sigma_a_new, p_pa, nu_c=nu_c_grid), p_pa)
+            _, sigma_p_new, _ = conductivity_from_ne(
+                ne_from_sigma(sigma_a_new, p_pa, nu_c=nu_c_grid),
+                p_pa,
+                nu_c=nu_c_grid,
+            )
             # Нет под-релаксации: шаг dt уже контролирует скорость изменения
             sigma_a_next = sigma_a_new
             sigma_p_next = sigma_p_new
@@ -277,7 +322,11 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             n_e_new = n_e_raw * target_dyn / norm    # [m⁻³]
             n_e_new[-1] = 0.0
 
-            sigma_a_new, sigma_p_new, _ = conductivity(n_e_new, p_pa)
+            sigma_a_new, sigma_p_new, _ = conductivity_from_ne(
+                n_e_new,
+                p_pa,
+                nu_c=nu_c_grid,
+            )
 
             # Под-релаксация (стабилизирует итерации по мощности)
             sigma_a_next = relax * sigma_a_new + (1.0 - relax) * sigma_a
@@ -323,10 +372,20 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             break
 
     # Final derived quantities
-    n_e_final  = ne_from_sigma(sigma_a, p_pa)
-    E_eff_fin  = effective_field(np.sqrt(v), p_pa)
-    Da_final   = ambipolar_diffusion(E_eff_fin, p_pa)
-    nu_i_final = ionization_freq(E_eff_fin, p_pa)
+    if transport is not None:
+        E_eff_fin, nu_c_fin = _effective_field_with_transport(np.sqrt(v))
+        Da_final = np.asarray(transport.ambipolar_diffusion(E_eff_fin, p_pa), dtype=float)
+        nu_i_final = np.asarray(transport.ionization_freq(E_eff_fin, p_pa), dtype=float)
+        if Da_final.ndim == 0:
+            Da_final = np.full_like(E_eff_fin, float(Da_final))
+        if nu_i_final.ndim == 0:
+            nu_i_final = np.full_like(E_eff_fin, float(nu_i_final))
+        n_e_final = ne_from_sigma(sigma_a, p_pa, nu_c=nu_c_fin)
+    else:
+        n_e_final = ne_from_sigma(sigma_a, p_pa)
+        E_eff_fin = effective_field(np.sqrt(v), p_pa)
+        Da_final = ambipolar_diffusion(E_eff_fin, p_pa)
+        nu_i_final = ionization_freq(E_eff_fin, p_pa)
 
     return {
         "r":        r,

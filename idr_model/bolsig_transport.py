@@ -104,9 +104,10 @@ class BolsigTransport:
             self._has_ionization = False
             self._E_N_ion_threshold = np.inf
 
-    def _E_eff_to_E_N(self, E_eff):
-        """Пересчёт E_eff [В/м] → E/N [Td]."""
-        return E_eff / (self.n_gas * TD_TO_VM2)
+    def _E_eff_to_E_N(self, E_eff, p_pa):
+        """Пересчёт E_eff [В/м] → E/N [Td] при текущем p_pa."""
+        n_gas = p_pa / (K_BOLTZMANN * self.T_gas)
+        return E_eff / (n_gas * TD_TO_VM2)
 
     def ionization_freq(self, E_eff, p_pa):
         """
@@ -119,7 +120,7 @@ class BolsigTransport:
         E_eff = np.atleast_1d(E_eff)
 
         n_gas = p_pa / (K_BOLTZMANN * self.T_gas)
-        E_N = self._E_eff_to_E_N(E_eff)
+        E_N = self._E_eff_to_E_N(E_eff, p_pa)
 
         result = np.zeros_like(E_eff)
 
@@ -148,7 +149,7 @@ class BolsigTransport:
         E_eff = np.atleast_1d(E_eff)
 
         n_gas = p_pa / (K_BOLTZMANN * self.T_gas)
-        E_N = self._E_eff_to_E_N(E_eff)
+        E_N = self._E_eff_to_E_N(E_eff, p_pa)
 
         # Clamp E/N to table range for extrapolation safety
         log_EN = np.log(np.maximum(E_N, self._E_N_min * 0.1))
@@ -175,7 +176,7 @@ class BolsigTransport:
         E_eff = np.atleast_1d(E_eff)
 
         n_gas = p_pa / (K_BOLTZMANN * self.T_gas)
-        E_N = self._E_eff_to_E_N(E_eff)
+        E_N = self._E_eff_to_E_N(E_eff, p_pa)
 
         log_EN = np.log(np.maximum(E_N, self._E_N_min * 0.1))
 

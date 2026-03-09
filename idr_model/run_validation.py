@@ -102,6 +102,10 @@ def run_single_pressure(p_pa: float, H_wall: float,
 
 def ne_max_from_result(result: dict, p_pa: float, nu_c_val=None) -> float:
     """Извлекает максимальную ne [м⁻³] из результата солвера."""
+    if "n_e" in result:
+        ne = np.asarray(result["n_e"], dtype=float)
+        return float(ne.max())
+
     sigma_a = result["sigma_a"]
     if nu_c_val is None:
         nu_c_val = collision_freq(p_pa)
@@ -177,8 +181,8 @@ def run_validation(use_bolsig=False, beta_recomb=0.0, save_dir=None,
 
         transport = bolsig_transports.get(p_pa, None)
 
-        print(f"── p = {p_pa:.0f} Pa ({p_pa/133.322:.1f} Torr) ──")
-        print(f"    H_wall = {H_wall:.1f} A/m  (from j_exp = {j_exp} kA/m²)")
+        print(f"-- p = {p_pa:.0f} Pa ({p_pa/133.322:.1f} Torr) --")
+        print(f"    H_wall = {H_wall:.1f} A/m  (from j_exp = {j_exp} kA/m^2)")
         print(f"    regime: {regime}")
 
         result = run_single_pressure(

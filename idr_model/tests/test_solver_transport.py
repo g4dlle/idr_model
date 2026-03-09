@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
 import pytest
+from config import OMEGA
 from solver import solve_idr
 
 
@@ -156,6 +157,53 @@ class TestSolverWithTransport:
 
         assert np.all(result["sigma_a"] >= -1e-10)
         assert abs(result["sigma_a"][-1]) < 1e-8
+
+    def test_sigma_ratio_uses_transport_nu_c(self):
+        """sigma_p/sigma_a должен определяться nu_c из transport, а не аналитикой по p."""
+        from physics import (
+            ionization_freq as analytical_nu_i,
+            ambipolar_diffusion as analytical_Da,
+            collision_freq as analytical_nu_c,
+        )
+
+        class FixedNuCTransport:
+            def __init__(self, nu_c_val):
+                self._nu_c = float(nu_c_val)
+
+            def ionization_freq(self, E_eff, p_pa):
+                return analytical_nu_i(E_eff, p_pa)
+
+            def ambipolar_diffusion(self, E_eff, p_pa):
+                return analytical_Da(E_eff, p_pa)
+
+            def collision_freq(self, E_eff, p_pa):
+                if isinstance(E_eff, np.ndarray):
+                    return np.full_like(E_eff, self._nu_c)
+                return self._nu_c
+
+        p_pa = 133.0
+        nu_c_analytic = float(analytical_nu_c(p_pa))
+        nu_c_transport = 0.2 * nu_c_analytic
+        transport = FixedNuCTransport(nu_c_transport)
+
+        result = solve_idr(
+            N=80, R=0.012, p_pa=p_pa,
+            H_wall=100000.0, max_iter=300,
+            tol=1e-5, relax=0.5,
+            transport=transport,
+        )
+
+        idx = int(np.argmax(result["sigma_a"]))
+        sigma_a_peak = float(result["sigma_a"][idx])
+        sigma_p_peak = float(result["sigma_p"][idx])
+        assert sigma_a_peak > 0.0
+
+        ratio_model = sigma_p_peak / sigma_a_peak
+        ratio_transport = OMEGA / nu_c_transport
+        ratio_analytic = OMEGA / nu_c_analytic
+
+        assert ratio_model == pytest.approx(ratio_transport, rel=1e-2)
+        assert not np.isclose(ratio_model, ratio_analytic, rtol=0.1)
 
 
 # ── Рекомбинация в солвере ───────────────────────────────────────────────────
