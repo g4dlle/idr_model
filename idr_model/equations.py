@@ -245,11 +245,17 @@ def build_sigma_equation(r: np.ndarray, h: float,
                           nu_i: np.ndarray,
                           sigma_a_ref: np.ndarray | None = None,
                           dt: float | None = None,
+                          beta_recomb: float = 0.0,
                           ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Строит трёхдиагональную СЛАУ для уравнения (13):
+    Строит трёхдиагональную СЛАУ для уравнения (13) с опциональной рекомбинацией:
 
-      (1/r)·d/dr(r·Da·dσ/dr) + νi·σ = 0
+      (1/r)·d/dr(r·Da·dσ/dr) + νi·σ − β·σ² = 0
+
+    При beta_recomb = 0 воспроизводится исходное уравнение без рекомбинации.
+
+    Член рекомбинации −β·σ² линеаризуется явно через σ_ref:
+      rhs = νi·σ_ref − β·σ_ref²
 
     Три режима (управляются параметрами sigma_a_ref и dt):
 
@@ -259,16 +265,15 @@ def build_sigma_equation(r: np.ndarray, h: float,
       Используется в тестах.
 
     • sigma_a_ref is not None, dt is None — итерация по мощности (power iteration):
-        (−Da·Δ)·σ_new = νi·σ_ref
+        (−Da·Δ)·σ_new = νi·σ_ref − β·σ_ref²
       Сходится к фундаментальной моде J₀, но амплитуда зафиксирована через
       нормировку вне этой функции.
 
     • sigma_a_ref is not None, dt is not None — псевдоустановление по времени (IMEX):
-        (σ_new − σ_old)/dt = (1/r)·d/dr(r·Da·dσ_new/dr) + νi·σ_old
-      Диффузия неявная (устойчиво), ионизация явная.
+        (σ_new − σ_old)/dt = (1/r)·d/dr(r·Da·dσ_new/dr) + νi·σ_old − β·σ_old²
+      Диффузия неявная (устойчиво), ионизация и рекомбинация явные.
       При сходимости σ_new → σ_old, что соответствует физическому равновесию
-        (1/r)·d/dr(r·Da·dσ/dr) + νi·σ = 0.
-      Амплитуда эволюционирует самосогласованно до баланса νi = λ₁·Da.
+        (1/r)·d/dr(r·Da·dσ/dr) + νi·σ − β·σ² = 0.
 
     Граничные условия:
       r=0: dσ/dr = 0  (ghost node / правило Лопиталя)
@@ -276,12 +281,13 @@ def build_sigma_equation(r: np.ndarray, h: float,
 
     Parameters
     ----------
-    r          : сетка (N+1,)
-    h          : шаг сетки [м]
-    Da         : амбиполярный коэффициент диффузии (N+1,) [м²/с]
-    nu_i       : частота ионизации (N+1,) [с⁻¹]
-    sigma_a_ref: профиль σ с предыдущего шага (N+1,); None → однородная форма
-    dt         : шаг псевдо-времени [с]; None → без временного члена
+    r           : сетка (N+1,)
+    h           : шаг сетки [м]
+    Da          : амбиполярный коэффициент диффузии (N+1,) [м²/с]
+    nu_i        : частота ионизации (N+1,) [с⁻¹]
+    sigma_a_ref : профиль σ с предыдущего шага (N+1,); None → однородная форма
+    dt          : шаг псевдо-времени [с]; None → без временного члена
+    beta_recomb : коэффициент объёмной рекомбинации [м³/с]; 0 → без рекомбинации
 
     Returns
     -------
@@ -315,9 +321,11 @@ def build_sigma_equation(r: np.ndarray, h: float,
         if power_iter:
             main[0]  =  2.0 * Dp0 / h**2 + inv_dt
             if time_step:
-                rhs[0] = sigma_a_ref[0] * (inv_dt + nu_i[0])
+                rhs[0] = sigma_a_ref[0] * (inv_dt + nu_i[0]) \
+                         - beta_recomb * sigma_a_ref[0]**2
             else:
-                rhs[0] = nu_i[0] * sigma_a_ref[0]
+                rhs[0] = nu_i[0] * sigma_a_ref[0] \
+                         - beta_recomb * sigma_a_ref[0]**2
         else:
             main[0]  =  2.0 * Dp0 / h**2 - nu_i[0]
             rhs[0]   = 0.0
@@ -337,9 +345,11 @@ def build_sigma_equation(r: np.ndarray, h: float,
         if power_iter:
             main[i] = coef * (rp * Dp + rm * Dm) + inv_dt
             if time_step:
-                rhs[i] = sigma_a_ref[i] * (inv_dt + nu_i[i])
+                rhs[i] = sigma_a_ref[i] * (inv_dt + nu_i[i]) \
+                         - beta_recomb * sigma_a_ref[i]**2
             else:
-                rhs[i] = nu_i[i] * sigma_a_ref[i]
+                rhs[i] = nu_i[i] * sigma_a_ref[i] \
+                         - beta_recomb * sigma_a_ref[i]**2
         else:
             main[i]  =  coef * (rp * Dp + rm * Dm) - nu_i[i]
             rhs[i]   = 0.0

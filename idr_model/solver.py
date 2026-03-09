@@ -84,15 +84,22 @@ def thomas_solve(lower, main, upper, rhs):
 # Helper computations on the grid
 # ---------------------------------------------------------------------------
 
-def ne_from_sigma(sigma_a, p_pa):
+def ne_from_sigma(sigma_a, p_pa, nu_c=None):
     """
     Extract electron density from active conductivity.
 
     sigma_a = n_e*e^2*nu_c / (m_e*(nu_c^2+omega^2))
     => n_e = sigma_a * m_e*(nu_c^2+omega^2) / (e^2*nu_c)
+
+    Parameters
+    ----------
+    sigma_a : active conductivity [S/m]
+    p_pa    : pressure [Pa]
+    nu_c    : collision frequency [s^-1] (None => compute from pressure)
     """
-    from physics import collision_freq
-    nu_c = collision_freq(p_pa)
+    if nu_c is None:
+        from physics import collision_freq
+        nu_c = collision_freq(p_pa)
     return sigma_a * M_ELECTRON * (nu_c**2 + OMEGA**2) / (E_CHARGE**2 * nu_c)
 
 
@@ -109,7 +116,8 @@ def compute_alpha(sigma_a, sigma_p):
 
 def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
               max_iter=MAX_ITER, tol=TOL, relax=RELAX, dt=None,
-              r_inc=0.0, verbose=False):
+              r_inc=0.0, verbose=False,
+              transport=None, beta_recomb=0.0):
     """
     Iterative solver for the 1D IDR model.
 
@@ -130,6 +138,11 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
                0.0   → standard geometry (full cylinder, axis at r=0).
                > 0   → annular geometry r ∈ [r_inc, R].
     verbose  : print residuals if True
+    transport : object with methods ionization_freq(E_eff, p_pa),
+                ambipolar_diffusion(E_eff, p_pa), collision_freq(E_eff, p_pa).
+                None → use analytical formulae from physics.py.
+    beta_recomb : volume recombination coefficient [m^3/s].
+                  0.0 → no recombination (default).
 
     Returns
     -------
@@ -190,11 +203,30 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
 
         # Step c: effective field
         E_abs = np.sqrt(v_new)
-        E_eff = effective_field(E_abs, p_pa)
+        if transport is not None:
+            # Iterative E_eff: nu_c(E/N) creates implicit dependence
+            E_eff = E_abs / np.sqrt(2.0)  # initial guess
+            for _eeff_iter in range(5):
+                nu_c_arr = transport.collision_freq(E_eff, p_pa)
+                E_eff_new = E_abs / np.sqrt(2.0) * nu_c_arr / np.sqrt(nu_c_arr**2 + OMEGA**2)
+                if np.max(np.abs(E_eff_new - E_eff)) < 1e-6 * (np.max(E_eff) + 1e-30):
+                    break
+                E_eff = E_eff_new
+            nu_c_grid = nu_c_arr  # save for ne_from_sigma
+        else:
+            E_eff = effective_field(E_abs, p_pa)
+            nu_c_grid = None  # use default in ne_from_sigma
 
         # Step d: transport coefficients
-        Da   = ambipolar_diffusion(E_eff, p_pa)
-        nu_i = ionization_freq(E_eff, p_pa)
+        if transport is not None:
+            Da   = transport.ambipolar_diffusion(E_eff, p_pa)
+            nu_i = transport.ionization_freq(E_eff, p_pa)
+            # Ensure array types
+            Da   = np.asarray(Da, dtype=float)
+            nu_i = np.asarray(nu_i, dtype=float)
+        else:
+            Da   = ambipolar_diffusion(E_eff, p_pa)
+            nu_i = ionization_freq(E_eff, p_pa)
 
         # Step e: solve for sigma profile
         if dt is not None:
@@ -204,13 +236,14 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             # Амплитуда n_e эволюционирует к физическому равновесию νi = λ₁·Da
             # без какой-либо внешней нормировки.
             l, m, up, rhs = build_sigma_equation(r, h, Da, nu_i,
-                                                  sigma_a_ref=sigma_a, dt=dt)
+                                                  sigma_a_ref=sigma_a, dt=dt,
+                                                  beta_recomb=beta_recomb)
             sigma_a_new = thomas_solve(l, m, up, rhs)
             sigma_a_new = np.maximum(sigma_a_new, 0.0)
             if annular:
                 sigma_a_new[0] = 0.0   # рекомбинация на включении
             apply_wall_sigma(sigma_a_new)
-            _, sigma_p_new, _ = conductivity(ne_from_sigma(sigma_a_new, p_pa), p_pa)
+            _, sigma_p_new, _ = conductivity(ne_from_sigma(sigma_a_new, p_pa, nu_c=nu_c_grid), p_pa)
             # Нет под-релаксации: шаг dt уже контролирует скорость изменения
             sigma_a_next = sigma_a_new
             sigma_p_next = sigma_p_new
@@ -224,7 +257,8 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             #   integral_ref = ∫ n_e_current · r dr  [m⁻¹]
             #   integral_new = ∫ sigma_raw   · r dr  [S·m]
             #   n_e_new = sigma_raw · integral_ref / integral_new  [m⁻³] ✓
-            l, m, up, rhs = build_sigma_equation(r, h, Da, nu_i, sigma_a_ref=sigma_a)
+            l, m, up, rhs = build_sigma_equation(r, h, Da, nu_i, sigma_a_ref=sigma_a,
+                                                  beta_recomb=beta_recomb)
             sigma_raw = thomas_solve(l, m, up, rhs)
             sigma_raw = np.maximum(sigma_raw, 0.0)
             if annular:
@@ -234,7 +268,7 @@ def solve_idr(N=N_GRID, R=R_TUBE, p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
             n_e_raw = sigma_raw
             n_e_raw[-1] = 0.0
 
-            n_e_current = ne_from_sigma(sigma_a, p_pa)                         # [m⁻³]
+            n_e_current = ne_from_sigma(sigma_a, p_pa, nu_c=nu_c_grid)         # [m⁻³]
             integral_ref = np.trapezoid(n_e_current[:-1] * r[:-1], r[:-1])    # [m⁻¹]
             target_dyn   = integral_ref if integral_ref > 1e-300 else n_e0 * R**2 / 2.0
 
