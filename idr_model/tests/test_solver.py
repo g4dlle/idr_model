@@ -44,10 +44,10 @@ def test_tridiagonal_solver():
     )
 
 
-# --- 4.2 Single equation (11) with known sigma --------------------------------
+# --- 4.2 Single with known sigma --------------------------------
 def test_single_equation_H_known_sigma():
     """
-    With sigma_a=const, sigma_p=const, v=0 equation (11) has solution u=const.
+    With sigma_a=const, sigma_p=const, v=0 has solution u=const.
     Dirichlet BC at R: u(R) = H_wall_sq.
     Expected: u = H_wall_sq everywhere (no source, symmetric BC).
     """
@@ -74,10 +74,10 @@ def test_single_equation_H_known_sigma():
     )
 
 
-# --- 4.3 Single equation (13) with constant E_eff: discrete residual = 0 ----
+# --- 4.3 with constant E_eff: discrete residual = 0 ----
 def test_single_equation_sigma_known_E():
     """
-    Equation (13) with Da=const, nu_i=const satisfies the discrete system exactly.
+    E with Da=const, nu_i=const satisfies the discrete system exactly.
     Check that the numerical residual A*sigma - b < eps.
     """
     N = 200

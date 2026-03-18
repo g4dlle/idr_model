@@ -20,7 +20,7 @@ from solver import thomas_solve
 # --- 2.1 Constant sigma: operator reproduces the exact solution ---------------
 def test_H_equation_constant_sigma():
     """
-    With sigma_a=const, sigma_p=const, v=0 equation (11) reduces to
+    With sigma_a=const, sigma_p=const, v=0 reduces to
     (1/r) d/dr(r*du/dr) = 0 => u = const (with u'(0)=0 and Dirichlet at R).
     """
     N = 50
@@ -55,7 +55,7 @@ def test_diffusion_operator_symmetric():
 
     Equivalently: A[i,j] * r[i] = A[j,i] * r[j]  for internal nodes.
 
-    We verify this for the sigma equation (13) with Da=const, nu_i=0.
+    We verify this for the sigma with Da=const, nu_i=0.
     """
     N = 20
     R = 0.01
@@ -83,7 +83,7 @@ def test_diffusion_operator_symmetric():
 # --- 2.3 Zero RHS, zero source => constant solution --------------------------
 def test_zero_rhs_constant_solution():
     """
-    Equation (13) with nu_i=0, RHS=0, BC: d_sigma/dr(0)=0, sigma(R)=C => sigma=C.
+    nu_i=0, RHS=0, BC: d_sigma/dr(0)=0, sigma(R)=C => sigma=C.
     """
     N = 40
     R = 0.01
@@ -107,7 +107,7 @@ def test_zero_rhs_constant_solution():
 # --- 2.4 Flux conservation ---------------------------------------------------
 def test_flux_conservation():
     """
-    For equation (13) without source (nu_i=0):
+    Sigma equation without source (nu_i=0):
     The discrete residual A*x - b = 0 for the computed solution.
     """
     N = 40

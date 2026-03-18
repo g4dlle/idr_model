@@ -137,7 +137,7 @@ class TestEquationsAnnular:
 
     def test_H_equation_constant_sigma_annular(self):
         """
-        Уравнение (11) с σ=const, v=0 на кольцевой сетке:
+        σ=const, v=0 на кольцевой сетке:
         (1/r)d/dr(r·du/dr) = 0 с ГУ u'(r_inc)=0, u(R) = H_wall².
         Решение: u = const = H_wall².
         """
@@ -168,7 +168,7 @@ class TestEquationsAnnular:
 
     def test_E_equation_dirichlet_at_inclusion(self):
         """
-        Уравнение (12) на кольцевой сетке: ГУ v[0] = 0 (E=0 на проводнике).
+        на кольцевой сетке: ГУ v[0] = 0 (E=0 на проводнике).
         """
         from equations import make_grid, build_E_equation
         from solver import thomas_solve
@@ -190,7 +190,7 @@ class TestEquationsAnnular:
 
     def test_sigma_equation_zero_on_both_walls(self):
         """
-        Уравнение (13) на кольцевой сетке: σ(r_inc) = 0 и σ(R) = 0.
+        на кольцевой сетке: σ(r_inc) = 0 и σ(R) = 0.
         """
         from equations import make_grid, build_sigma_equation
         from solver import thomas_solve

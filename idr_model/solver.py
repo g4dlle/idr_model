@@ -1,5 +1,5 @@
 """
-solver.py -- iterative solver for the IDR system of equations (11)-(13).
+solver.py -- iterative solver for the IDR system.
 
 Algorithm: sequential Gauss-Seidel over equations.
 Each equation is solved by the Thomas (tridiagonal) algorithm.
