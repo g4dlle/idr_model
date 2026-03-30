@@ -1,0 +1,23 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- C:\Projects\idr_model\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Projects\idr_model
+configfile: pyproject.toml
+collecting ... collected 6 items
+
+idr_model/tests/test_self_consistent.py::test_lambda0_bessel_analytic PASSED [ 16%]
+idr_model/tests/test_self_consistent.py::test_lambda0_scaled PASSED      [ 33%]
+idr_model/tests/test_self_consistent.py::test_maxwell_wrapper_fields PASSED [ 50%]
+idr_model/tests/test_self_consistent.py::test_lambda0_monotone_vs_ne0 PASSED [ 66%]
+idr_model/tests/test_self_consistent.py::test_find_ne0_converges PASSED  [ 83%]
+idr_model/tests/test_self_consistent.py::test_result_physical_bounds PASSED [100%]
+
+============================== warnings summary ===============================
+idr_model/tests/test_self_consistent.py::test_lambda0_monotone_vs_ne0
+idr_model/tests/test_self_consistent.py::test_find_ne0_converges
+idr_model/tests/test_self_consistent.py::test_result_physical_bounds
+  C:\Projects\idr_model\idr_model\tests\..\self_consistent.py:188: RuntimeWarning: overflow encountered in divide
+    res_u = float(np.max(np.abs(u_new[:-1] - u[:-1]) / safe_u))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 6 passed, 3 warnings in 58.61s ========================

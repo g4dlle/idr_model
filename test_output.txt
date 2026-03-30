@@ -1,0 +1,92 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- C:\Projects\idr_model\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Projects\idr_model
+configfile: pyproject.toml
+collecting ... collected 6 items
+
+idr_model/tests/test_self_consistent.py::test_lambda0_bessel_analytic PASSED [ 16%]
+idr_model/tests/test_self_consistent.py::test_lambda0_scaled PASSED      [ 33%]
+idr_model/tests/test_self_consistent.py::test_maxwell_wrapper_fields PASSED [ 50%]
+idr_model/tests/test_self_consistent.py::test_lambda0_monotone_vs_ne0 PASSED [ 66%]
+idr_model/tests/test_self_consistent.py::test_find_ne0_converges FAILED  [ 83%]
+idr_model/tests/test_self_consistent.py::test_result_physical_bounds PASSED [100%]
+
+================================== FAILURES ===================================
+___________________________ test_find_ne0_converges ___________________________
+idr_model\tests\test_self_consistent.py:148: in test_find_ne0_converges
+    assert result["converged"], (
+E   AssertionError: \u0411\u0438\u0441\u0435\u043a\u0446\u0438\u044f \u043d\u0435 \u0441\u043e\u0448\u043b\u0430\u0441\u044c: \u03bb\u2080 = 0.8194, n_e0 = 7.101e+20
+E   assert np.False_
+---------------------------- Captured stdout call -----------------------------
+  bisect   0: n_e0=1.000e+20  lambda0=0.312785  conv=True  iters=43
+  bisect   1: n_e0=1.000e+21  lambda0=1043301.074830  conv=False  iters=2000
+  bisect   2: n_e0=3.162e+20  lambda0=0.381238  conv=True  iters=93
+  bisect   3: n_e0=5.623e+20  lambda0=0.588305  conv=True  iters=102
+  bisect   4: n_e0=7.499e+20  lambda0=256.627579  conv=False  iters=2000
+  bisect   5: n_e0=6.494e+20  lambda0=0.712082  conv=True  iters=105
+  bisect   6: n_e0=6.978e+20  lambda0=0.796256  conv=True  iters=107
+  bisect   7: n_e0=7.234e+20  lambda0=108.526478  conv=False  iters=2000
+  bisect   8: n_e0=7.105e+20  lambda0=69.736627  conv=False  iters=2000
+  bisect   9: n_e0=7.041e+20  lambda0=0.808092  conv=True  iters=107
+  bisect  10: n_e0=7.073e+20  lambda0=0.814120  conv=True  iters=107
+  bisect  11: n_e0=7.089e+20  lambda0=0.817158  conv=True  iters=107
+  bisect  12: n_e0=7.097e+20  lambda0=0.818681  conv=True  iters=107
+  bisect  13: n_e0=7.101e+20  lambda0=68.976380  conv=False  iters=2000
+  bisect  14: n_e0=7.099e+20  lambda0=0.819062  conv=True  iters=107
+  bisect  15: n_e0=7.100e+20  lambda0=0.819253  conv=True  iters=107
+  bisect  16: n_e0=7.100e+20  lambda0=0.819348  conv=True  iters=107
+  bisect  17: n_e0=7.101e+20  lambda0=68.929582  conv=False  iters=2000
+  bisect  18: n_e0=7.101e+20  lambda0=68.906213  conv=False  iters=2000
+  bisect  19: n_e0=7.101e+20  lambda0=68.894537  conv=False  iters=2000
+  bisect  20: n_e0=7.101e+20  lambda0=0.819354  conv=True  iters=107
+  bisect  21: n_e0=7.101e+20  lambda0=0.819357  conv=True  iters=107
+  bisect  22: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  23: n_e0=7.101e+20  lambda0=68.893807  conv=False  iters=2000
+  bisect  24: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  25: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  26: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  27: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  28: n_e0=7.101e+20  lambda0=68.893784  conv=False  iters=2000
+  bisect  29: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  30: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  31: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  32: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  33: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  34: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  35: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  36: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  37: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  38: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  39: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  40: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  41: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  42: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  43: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  44: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  45: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  46: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  47: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  48: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  49: n_e0=7.101e+20  lambda0=68.893778  conv=False  iters=2000
+  bisect  50: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  51: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  52: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  53: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  54: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  55: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  56: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  57: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  58: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+  bisect  59: n_e0=7.101e+20  lambda0=0.819359  conv=True  iters=107
+============================== warnings summary ===============================
+idr_model/tests/test_self_consistent.py::test_lambda0_monotone_vs_ne0
+idr_model/tests/test_self_consistent.py::test_find_ne0_converges
+idr_model/tests/test_self_consistent.py::test_result_physical_bounds
+  C:\Projects\idr_model\idr_model\tests\..\self_consistent.py:188: RuntimeWarning: overflow encountered in divide
+    res_u = float(np.max(np.abs(u_new[:-1] - u[:-1]) / safe_u))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED idr_model/tests/test_self_consistent.py::test_find_ne0_converges - Ass...
+============= 1 failed, 5 passed, 3 warnings in 78.34s (0:01:18) ==============
