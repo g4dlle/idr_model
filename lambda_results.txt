@@ -1,0 +1,4 @@
+ne=3e+20: lambda0=0.373147  n_iter=37  conv=True  u_ratio=0.847929
+ne=5e+20: lambda0=0.518321  n_iter=40  conv=True  u_ratio=0.648442
+ne=7e+20: lambda0=0.800385  n_iter=213  conv=True  u_ratio=0.456518
+ne=1e+21: lambda0=229622.886835  n_iter=1000  conv=False  u_ratio=0.000000
