@@ -213,5 +213,120 @@ def test_result_physical_bounds():
     assert n_e[0] > 0, f"n_e(0) = {n_e[0]:.3e} ≤ 0"
 
 
+# ---------------------------------------------------------------------------
+# 7. Точное попадание λ₀=1 на граничной точке → converged=True
+# ---------------------------------------------------------------------------
+def test_bracket_endpoint_exact_root(monkeypatch):
+    """
+    Если λ₀(n_e0_lo) == 1.0 точно, find_n_e0 должна вернуть
+    converged=True и bracket_ok=True, а не bracket_ok=False.
+
+    Было: (lam_lo - 1) * (lam_hi - 1) == 0 не удовлетворяло строгому < 0,
+    что приводило к ранней ошибочной сигнатуре converged=False.
+    """
+    import self_consistent as sc
+
+    call_count = {"n": 0}
+
+    def fake_solve(n_e0, **kwargs):
+        """
+        Первый вызов (нижняя граница) возвращает λ₀=1.0 (точный корень).
+        Второй (верхняя граница) — λ₀=10.0.
+        Все остальные — λ₀=5.0, несошедшиеся.
+        """
+        call_count["n"] += 1
+        base = {
+            "r": np.array([0.0, 0.006, 0.012]),
+            "u": np.array([1e10, 5e9, 1e10]),
+            "v": np.array([0.0, 1e4, 2e4]),
+            "sigma_a": np.array([1.0, 0.5, 0.0]),
+            "sigma_p": np.array([0.1, 0.05, 0.0]),
+            "n_e": np.array([1e16, 5e15, 0.0]),
+            "Da": np.array([1.0, 1.0, 1.0]),
+            "nu_i": np.array([1.0, 1.0, 1.0]),
+            "n_iter": 10,
+            "residuals": [1e-6],
+        }
+        if call_count["n"] == 1:
+            return {**base, "lambda0": 1.0, "converged": True}
+        if call_count["n"] == 2:
+            return {**base, "lambda0": 10.0, "converged": True}
+        return {**base, "lambda0": 5.0, "converged": False}
+
+    monkeypatch.setattr(sc, "solve_maxwell_for_ne0", fake_solve)
+
+    result = sc.find_n_e0(
+        n_e0_bounds=(1e14, 1e22),
+        tol_lambda=0.05,
+        max_bisect=20,
+    )
+
+    assert result["converged"], (
+        f"Ожидалось converged=True при λ₀=1 на нижней границе, "
+        f"получено: converged={result['converged']}, bracket_ok={result.get('bracket_ok')}"
+    )
+    assert result.get("bracket_ok"), (
+        "bracket_ok должен быть True при точном попадании в корень"
+    )
+    assert result["solution"] is not None, "solution не должен быть None"
+    assert abs(result["lambda0"] - 1.0) < 0.05, (
+        f"lambda0={result['lambda0']} далеко от 1"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8. Если все внутренние точки не сходятся — solution берётся из границ
+# ---------------------------------------------------------------------------
+def test_bracket_fallback_uses_boundary_solution(monkeypatch):
+    """
+    При корректной скобке, но полном провале сходимости внутренних точек
+    бисекции, find_n_e0 должна вернуть solution из лучшей граничной точки,
+    а не None (что приводило бы к E_R=0 в solve_self_consistent).
+
+    Было: best_result инициализировался только при попадании в tol_lambda;
+    при провале всех внутренних точек возвращался solution=None.
+    """
+    import self_consistent as sc
+
+    call_count = {"n": 0}
+
+    def fake_solve(n_e0, **kwargs):
+        call_count["n"] += 1
+        base = {
+            "r": np.array([0.0, 0.006, 0.012]),
+            "u": np.array([1e10, 5e9, 1e10]),
+            "v": np.array([0.0, 1e4, 2e4]),
+            "sigma_a": np.array([1.0, 0.5, 0.0]),
+            "sigma_p": np.array([0.1, 0.05, 0.0]),
+            "n_e": np.array([1e16, 5e15, 0.0]),
+            "Da": np.array([1.0, 1.0, 1.0]),
+            "nu_i": np.array([1.0, 1.0, 1.0]),
+            "n_iter": 10,
+            "residuals": [1e-6],
+        }
+        if call_count["n"] == 1:   # нижняя граница: λ₀=0.5, сошлась
+            return {**base, "lambda0": 0.5, "converged": True}
+        if call_count["n"] == 2:   # верхняя граница: λ₀=5.0, сошлась
+            return {**base, "lambda0": 5.0, "converged": True}
+        # все внутренние точки — не сошлись
+        return {**base, "lambda0": 2.0, "converged": False}
+
+    monkeypatch.setattr(sc, "solve_maxwell_for_ne0", fake_solve)
+
+    result = sc.find_n_e0(
+        n_e0_bounds=(1e14, 1e22),
+        tol_lambda=0.05,
+        max_bisect=10,
+    )
+
+    assert result["solution"] is not None, (
+        "solution не должен быть None при наличии сошедшихся граничных точек"
+    )
+    # Ближайшая к 1 среди границ — нижняя (|0.5-1|=0.5 < |5-1|=4)
+    assert abs(result["lambda0"] - 0.5) < 1e-9, (
+        f"Ожидался lambda0=0.5 (ближайший к 1 из границ), получен {result['lambda0']}"
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

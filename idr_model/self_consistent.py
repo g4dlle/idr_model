@@ -183,11 +183,10 @@ def solve_maxwell_for_ne0(n_e0: float,
         sh_old = sigma_a[:-1] / s_max_old
         res_shape = float(np.max(np.abs(sh_new - sh_old)))
 
-        if np.any(u[:-1] > 0):
-            safe_u = np.where(np.abs(u[:-1]) > 0, np.abs(u[:-1]), 1e-300)
-            res_u = float(np.max(np.abs(u_new[:-1] - u[:-1]) / safe_u))
-        else:
-            res_u = 1.0
+        # Используем общую шкалу max(|u|, |u_new|) чтобы избежать деления
+        # на малые/нулевые значения (overflow при u→0 в первых итерациях).
+        u_ref = max(np.max(np.abs(u_new[:-1])), np.max(np.abs(u[:-1])), 1e-30)
+        res_u = float(np.max(np.abs(u_new[:-1] - u[:-1])) / u_ref)
 
         res = max(res_u, res_shape)
         residuals.append(res)
@@ -196,18 +195,26 @@ def solve_maxwell_for_ne0(n_e0: float,
         v[:] = v_new
         sigma_a[:] = sigma_a_next
         sigma_p[:] = sigma_p_next
-        n_e_shape = n_e_shape_new
+        # n_e_shape не обновляем из сырого sigma_raw — он будет пересчитан
+        # из финального (релаксированного) sigma_a после цикла.
 
         if res < tol:
             converged = True
             break
 
-    # Финальные величины
+    # Финальные величины.
+    # n_e восстанавливается из релаксированного sigma_a (σ ∝ n_e при фикс. E),
+    # чтобы n_e и sigma_a были взаимно согласованы даже при ранней остановке.
+    sigma_a_fin_max = np.max(sigma_a[:-1])
+    if sigma_a_fin_max > 1e-300:
+        n_e_final = n_e0 * sigma_a / sigma_a_fin_max
+    else:
+        n_e_final = n_e0 * np.maximum(1.0 - (r / R)**2, 0.0)
+    n_e_final[-1] = 0.0
+
     E_eff_fin  = effective_field(np.sqrt(v), p_pa)
     Da_final   = ambipolar_diffusion(E_eff_fin, p_pa)
     nu_i_final = ionization_freq(E_eff_fin, p_pa)
-    n_e_final  = n_e0 * n_e_shape
-    n_e_final[-1] = 0.0
 
     # λ₀
     lambda0_sq = compute_lambda0(r, h, Da_final, nu_i_final)
@@ -264,35 +271,106 @@ def find_n_e0(N: int = N_GRID,
     log_lo = np.log10(n_e0_bounds[0])
     log_hi = np.log10(n_e0_bounds[1])
     history = []
+
+    # ------------------------------------------------------------------
+    # Проверка скобки: λ₀ должна быть по разные стороны от 1 на концах.
+    # ------------------------------------------------------------------
+    def _lam_effective(res: dict) -> float:
+        """λ₀ из результата; 1e10 если не сошлось."""
+        return res["lambda0"] if res["converged"] else 1e10
+
+    def _adaptive_kw(ne0: float) -> dict:
+        kw = kw_base.copy()
+        if ne0 > 1e19:
+            kw['relax']    = min(kw.get('relax',    0.5),  0.2)
+            kw['max_iter'] = max(kw.get('max_iter', 500), 1000)
+        if ne0 > 1e20:
+            kw['relax']    = min(kw.get('relax',    0.2),  0.1)
+            kw['max_iter'] = max(kw.get('max_iter', 1000), 2000)
+        return kw
+
+    r_lo = solve_maxwell_for_ne0(n_e0=10.0**log_lo, N=N, R=R, p_pa=p_pa,
+                                  H_wall=H_wall, **_adaptive_kw(10.0**log_lo))
+    r_hi = solve_maxwell_for_ne0(n_e0=10.0**log_hi, N=N, R=R, p_pa=p_pa,
+                                  H_wall=H_wall, **_adaptive_kw(10.0**log_hi))
+    lam_lo = _lam_effective(r_lo)
+    lam_hi = _lam_effective(r_hi)
+
+    history.append((10.0**log_lo, r_lo["lambda0"]))
+    history.append((10.0**log_hi, r_hi["lambda0"]))
+
+    if verbose:
+        print(f"  bracket check: n_e0={10.0**log_lo:.3e} lambda0={lam_lo:.4f}"
+              f"  |  n_e0={10.0**log_hi:.3e} lambda0={lam_hi:.4f}")
+
+    # Проверяем: не является ли уже граничная точка корнем.
+    # Делаем это до проверки скобки, чтобы не потерять точное попадание.
     best_result = None
-    n_e0_trial = 10.0**(0.5*(log_lo+log_hi))
-    lam0 = 0.0
+    best_n_e0   = None
+    best_lam0   = None
+
+    for ne0_end, res_end in ((10.0**log_lo, r_lo), (10.0**log_hi, r_hi)):
+        if res_end["converged"]:
+            if best_result is None or abs(res_end["lambda0"] - 1.0) < abs(best_lam0 - 1.0):
+                best_result = res_end
+                best_n_e0   = ne0_end
+                best_lam0   = res_end["lambda0"]
+
+    # Если граничная точка уже в допуске — возвращаем сразу.
+    if best_result is not None and abs(best_lam0 - 1.0) < tol_lambda:
+        if verbose:
+            print(f"  bracket endpoint is already a root: "
+                  f"n_e0={best_n_e0:.3e}  lambda0={best_lam0:.6f}")
+        return {
+            "n_e0":       best_n_e0,
+            "lambda0":    best_lam0,
+            "converged":  True,
+            "n_bisect":   len(history),
+            "solution":   best_result,
+            "history":    history,
+            "bracket_ok": True,
+        }
+
+    # Проверяем скобку: λ₀ должна менять знак (λ₀−1) между концами.
+    # Используем <= 0 чтобы включить нулевое произведение (точное λ₀=1
+    # на границе уже обработано выше, так что здесь это не достижимо).
+    bracket_ok = (lam_lo - 1.0) * (lam_hi - 1.0) <= 0.0
+    if not bracket_ok:
+        # best_result уже содержит ближайшую к 1 сошедшуюся граничную точку
+        # (или None, если обе не сошлись); выбираем лучшее из доступного.
+        if best_result is None:
+            if abs(lam_lo - 1.0) <= abs(lam_hi - 1.0):
+                best_n_e0, best_lam0 = 10.0**log_lo, r_lo["lambda0"]
+            else:
+                best_n_e0, best_lam0 = 10.0**log_hi, r_hi["lambda0"]
+        if verbose:
+            print("  WARNING: bracket does not straddle lambda0=1; "
+                  "no root in given n_e0 range. Returning nearest endpoint.")
+        return {
+            "n_e0":       best_n_e0,
+            "lambda0":    best_lam0,
+            "converged":  False,
+            "n_bisect":   len(history),
+            "solution":   best_result,
+            "history":    history,
+            "bracket_ok": False,
+        }
+
+    # Скобка валидна. best_result уже инициализирован из граничных точек
+    # (лучшей из сошедшихся), так что внутренние точки могут только улучшить его.
+
+    n_e0_trial = 10.0**(0.5*(log_lo + log_hi))
+    lam0       = 0.5 * (lam_lo + lam_hi)   # только для инициализации
 
     for step in range(max_bisect):
-        log_mid = 0.5 * (log_lo + log_hi)
+        log_mid    = 0.5 * (log_lo + log_hi)
         n_e0_trial = 10.0**log_mid
 
-        # Адаптивная релаксация: чем выше n_e0 (сильнее скин), тем меньше relax
-        kw = kw_base.copy()
-        if n_e0_trial > 1e19:
-            kw['relax'] = min(kw.get('relax', 0.5), 0.2)
-            kw['max_iter'] = max(kw.get('max_iter', 500), 1000)
-        if n_e0_trial > 1e20:
-            kw['relax'] = min(kw.get('relax', 0.2), 0.1)
-            kw['max_iter'] = max(kw.get('max_iter', 1000), 2000)
-
         result = solve_maxwell_for_ne0(
-            n_e0=n_e0_trial, N=N, R=R, p_pa=p_pa, H_wall=H_wall, **kw)
-        lam0 = result["lambda0"]
-
-        # Если внутренний решатель не сошёлся, λ₀ ненадёжен.
-        # Физически: нет сходимости → σ слишком велика → скин-эффект
-        # коллапсировал → это режим λ₀ >> 1. Трактуем как λ₀ > 1.
-        if not result["converged"]:
-            lam0_effective = 1e10   # большое число → уменьшить n_e0
-        else:
-            lam0_effective = lam0
-            best_result = result    # обновляем только при сходимости
+            n_e0=n_e0_trial, N=N, R=R, p_pa=p_pa, H_wall=H_wall,
+            **_adaptive_kw(n_e0_trial))
+        lam0          = result["lambda0"]
+        lam0_effective = _lam_effective(result)
 
         history.append((n_e0_trial, lam0))
 
@@ -300,23 +378,38 @@ def find_n_e0(N: int = N_GRID,
             print(f"  bisect {step:3d}: n_e0={n_e0_trial:.3e}  lambda0={lam0:.6f}"
                   f"  conv={result['converged']}  iters={result['n_iter']}")
 
+        # Обновляем best_result только при сходимости Maxwell-решателя.
+        # Храним n_e0 и lambda0 из того же прогона — всегда согласованы.
+        if result["converged"]:
+            if best_result is None or abs(lam0 - 1.0) < abs(best_lam0 - 1.0):
+                best_result = result
+                best_n_e0   = n_e0_trial
+                best_lam0   = lam0
+
         if result["converged"] and abs(lam0 - 1.0) < tol_lambda:
             break
 
-        # λ₀ < 1 → ионизация > диффузии → увеличить n_e0 (усилить скин)
-        # λ₀ > 1 или нет сходимости → уменьшить n_e0
-        if lam0_effective < 1.0:
+        # Сдвигаем соответствующий конец скобки
+        if (lam_lo - 1.0) * (lam0_effective - 1.0) > 0.0:
             log_lo = log_mid
+            lam_lo = lam0_effective
         else:
             log_hi = log_mid
+            lam_hi = lam0_effective
+
+    # Если ни один шаг не дал сошедшегося решения, возвращаем последнюю точку
+    if best_result is None:
+        best_n_e0 = n_e0_trial
+        best_lam0 = lam0
 
     return {
-        "n_e0":      n_e0_trial,
-        "lambda0":   lam0,
-        "converged": abs(lam0 - 1.0) < tol_lambda,
-        "n_bisect":  len(history),
-        "solution":  best_result,
-        "history":   history,
+        "n_e0":       best_n_e0,
+        "lambda0":    best_lam0,
+        "converged":  best_result is not None and abs(best_lam0 - 1.0) < tol_lambda,
+        "n_bisect":   len(history),
+        "solution":   best_result,
+        "history":    history,
+        "bracket_ok": True,
     }
 
 
