@@ -35,7 +35,8 @@ def compute_lambda0_2d(r: np.ndarray, z: np.ndarray,
                        Da_2d: np.ndarray, nu_i_2d: np.ndarray,
                        bc_z_sigma: str = "dirichlet",
                        max_power_iter: int = 300,
-                       tol: float = 1e-8) -> float:
+                       tol: float = 1e-8,
+                       return_profile: bool = False):
     """
     Вычисляет λ₀² для 2D уравнения баланса частиц:
 
@@ -49,15 +50,18 @@ def compute_lambda0_2d(r: np.ndarray, z: np.ndarray,
 
     Parameters
     ----------
-    r, z        : 1D-сетки (Nr+1,) и (Nz+1,)
-    hr, hz      : шаги по r и z
-    Da_2d       : (Nr+1, Nz+1)
-    nu_i_2d     : (Nr+1, Nz+1)
-    bc_z_sigma  : "dirichlet" или "neumann"
+    r, z           : 1D-сетки (Nr+1,) и (Nz+1,)
+    hr, hz         : шаги по r и z
+    Da_2d          : (Nr+1, Nz+1)
+    nu_i_2d        : (Nr+1, Nz+1)
+    bc_z_sigma     : "dirichlet" или "neumann"
+    return_profile : если True — возвращает (lambda0_sq, sigma), иначе lambda0_sq
 
     Returns
     -------
-    lambda0_sq : λ₀² > 0
+    lambda0_sq          : λ₀² > 0
+    (lambda0_sq, sigma) : если return_profile=True; sigma — нормированный
+                          собственный вектор, shape (Nr+1, Nz+1)
     """
     Nr = len(r) - 1
     Nz = len(z) - 1
@@ -131,6 +135,8 @@ def compute_lambda0_2d(r: np.ndarray, z: np.ndarray,
             break
         lambda0_sq_prev = lambda0_sq
 
+    if return_profile:
+        return lambda0_sq, sigma
     return lambda0_sq
 
 
