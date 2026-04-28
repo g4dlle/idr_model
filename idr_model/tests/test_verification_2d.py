@@ -88,12 +88,14 @@ class TestLargeLLimit:
 
     def test_dirichlet_approaches_1d_as_L_grows(self):
         """
-        При Дирихле на торцах: λ₀² = D·[(j₀₁/R)² + (π/L)²]/ν
+        При Дирихле на торцах:
+            λ₀² = νi / (D·[(j₀₁/R)² + (π/L)²])
 
-        При L→∞ осевой вклад (π/L)²→0 и λ₀²→D·(j₀₁/R)²/ν (1D-предел).
+        При L→∞ осевой вклад (π/L)²→0 и λ₀² возрастает к 1D-пределу:
+            λ₀²_1D = νi·R² / (D·j₀₁²)
 
         Проверяем:
-          - Монотонное убывание λ₀² с ростом L
+          - Монотонный РОСТ λ₀² с ростом L (знаменатель убывает)
           - Последнее значение (L=20·R) отличается от 1D-предела < 3%
         """
         from self_consistent_2d import compute_lambda0_2d
@@ -102,7 +104,8 @@ class TestLargeLLimit:
         Nr  = 80
         D, nu = 1.0, 1.0
         j01 = 2.4048255577
-        lam_1d = D * (j01 / R)**2 / nu   # предел при L→∞
+        # λ₀²_1D = νi·R²/(Da·j₀₁²) = 1/j₀₁² (при D=νi=R=1)
+        lam_1d = nu * R**2 / (D * j01**2)   # предел при L→∞
 
         L_values = [1.0, 2.0, 5.0, 10.0, 20.0]
         lam_values = []
@@ -116,14 +119,14 @@ class TestLargeLLimit:
                                      bc_z_sigma="dirichlet")
             lam_values.append(lam)
 
-        # Монотонное убывание
+        # Монотонный рост (осевые потери уменьшаются → λ₀² растёт к 1D-пределу)
         for i in range(len(lam_values) - 1):
-            assert lam_values[i] > lam_values[i + 1], (
-                f"λ₀² не убывает: L={L_values[i]:.0f} → {lam_values[i]:.4f}, "
+            assert lam_values[i] < lam_values[i + 1], (
+                f"λ₀² не возрастает: L={L_values[i]:.0f} → {lam_values[i]:.4f}, "
                 f"L={L_values[i+1]:.0f} → {lam_values[i+1]:.4f}"
             )
 
-        # Сходимость к 1D-пределу
+        # Сходимость к 1D-пределу снизу
         rel_err = abs(lam_values[-1] - lam_1d) / lam_1d
         assert rel_err < 0.03, (
             f"При L=20: λ₀²={lam_values[-1]:.4f}, "
@@ -148,10 +151,9 @@ class TestAnnularBessel:
 
             J₀(k·R)·Y₀(k·r_inc) - J₀(k·r_inc)·Y₀(k·R) = 0
 
-        В коде λ₀² определяется как λ₀² = D·k₁² / ν (см. compute_lambda0):
-        power iteration на (-D·Δ)σ_new = ν·σ_old находит μ = ν/(D·k₁²),
-        затем λ₀² = 1/μ = D·k₁²/ν.
-        При λ₀=1: D·k₁²/ν = 1 → k₁ = √(ν/D) — условие Шоттки.
+        В коде λ₀² = μ — доминирующее собственное значение (−D·Δ)⁻¹·diag(ν):
+        power iteration на (−D·Δ)σ_new = ν·σ_old → μ = ν/(D·k₁²) → λ₀² = μ.
+        При λ₀=1: ν/(D·k₁²) = 1 → k₁ = √(ν/D) — условие Шоттки.
 
         Допуск 2% (дискретизация по r).
         """
@@ -180,7 +182,8 @@ class TestAnnularBessel:
         idx = np.where(vals[:-1] * vals[1:] < 0)[0]
         assert len(idx) > 0, "Первый ноль кросс-Бесселя не найден"
         mu1 = brentq(cross_bessel, mu_scan[idx[0]], mu_scan[idx[0] + 1])
-        lam0_sq_exact = D * mu1**2 / nu   # λ₀² = D·k₁²/ν (соглашение кода)
+        # λ₀² = νi/(Da·k₁²) = ν/(D·μ₁²) — правильная формула (μ = λ₀², а не 1/λ₀²).
+        lam0_sq_exact = nu / (D * mu1**2)
 
         rel_err = abs(lam0_sq_num - lam0_sq_exact) / lam0_sq_exact
         assert rel_err < 0.02, (
@@ -213,7 +216,8 @@ class TestGridConvergence:
         R, L = 1.0, 1.0
         D, nu = 1.0, 1.0
         j01 = 2.4048255577
-        lam_exact = D * ((j01 / R)**2 + (np.pi / L)**2) / nu
+        # λ₀²_exact = νi/(Da·[(j₀₁/R)²+(π/L)²]) — правильная формула.
+        lam_exact = nu / (D * ((j01 / R)**2 + (np.pi / L)**2))
 
         grids = [(20, 10), (40, 20), (80, 40)]
         errors = []

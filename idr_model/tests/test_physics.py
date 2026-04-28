@@ -14,8 +14,10 @@ from physics import (
     conductivity, effective_field,
     ambipolar_diffusion, ionization_freq,
     collision_freq,
+    neutral_density, gas_mass_density,
+    poiseuille_v0, poiseuille_velocity, sccm_to_kg_s,
 )
-from config import OMEGA, E_CHARGE, M_ELECTRON, NU_C_PER_TORR
+from config import OMEGA, E_CHARGE, M_ELECTRON, NU_C_PER_TORR, K_BOLTZMANN, M_ARGON
 
 P_TEST = 133.0   # Па ≈ 1 мм рт. ст.
 NE_TEST = 1e16   # м⁻³
@@ -146,6 +148,91 @@ def test_conductivity_analytic_value():
     sigma_a_expect = NE_TEST * E_CHARGE**2 * nu_c / (M_ELECTRON * (nu_c**2 + OMEGA**2))
     sigma_a, _, _ = conductivity(NE_TEST, P_TEST)
     assert abs(sigma_a - sigma_a_expect) / sigma_a_expect < 1e-12
+
+
+# ─── Тесты течения Пуазейля ───────────────────────────────────────────────────
+
+P_GAS = 133.0   # Па
+T_GAS = 300.0   # К
+R_TUBE = 0.012  # м
+
+
+def test_neutral_density():
+    """n_a = p / (k·T): проверка на аналитическое значение."""
+    expected = P_GAS / (K_BOLTZMANN * T_GAS)
+    assert abs(neutral_density(P_GAS, T_GAS) - expected) / expected < 1e-12
+
+
+def test_gas_mass_density():
+    """ρ = m_Ar · n_a."""
+    n_a = neutral_density(P_GAS, T_GAS)
+    expected = M_ARGON * n_a
+    assert abs(gas_mass_density(P_GAS, T_GAS) - expected) / expected < 1e-12
+
+
+def test_poiseuille_v0_formula():
+    """
+    v₀ = 2G / (π·ρ·R²).
+
+    Проверяет, что формула задаёт правильный знак и размерность.
+    При G > 0 должно быть v0 > 0.
+    """
+    G_kg_s = sccm_to_kg_s(500.0)
+    v0 = poiseuille_v0(G_kg_s, R_TUBE, P_GAS, T_GAS)
+    rho = gas_mass_density(P_GAS, T_GAS)
+    expected = 2.0 * G_kg_s / (np.pi * rho * R_TUBE**2)
+    assert v0 > 0, f"v0={v0} должно быть > 0"
+    assert abs(v0 - expected) / expected < 1e-12
+
+
+def test_poiseuille_mass_conservation():
+    """
+    Проверка закона сохранения массы: 2π ∫₀ᴿ ρ·v(r)·r dr = G.
+
+    Правильная формула (из физики):
+        G = (π/2)·ρ·v₀·R²   =>   2π ∫₀ᴿ ρ·v(r)·r dr = G
+
+    Это именно тот интеграл, который был записан неверно в рукописях
+    (там стояло 1/(2π) вместо 2π).
+    """
+    G_kg_s = sccm_to_kg_s(500.0)
+    Nr = 1000
+    r = np.linspace(0.0, R_TUBE, Nr + 1)
+    v = poiseuille_velocity(r, G_kg_s, R_TUBE, P_GAS, T_GAS)
+    rho = gas_mass_density(P_GAS, T_GAS)
+
+    # G = 2π ∫₀ᴿ ρ·v(r)·r dr
+    G_check = 2.0 * np.pi * np.trapezoid(rho * v * r, r)
+    rel_err = abs(G_check - G_kg_s) / G_kg_s
+    assert rel_err < 1e-5, (
+        f"Нарушение сохранения массы: G_check={G_check:.6e}, "
+        f"G_in={G_kg_s:.6e}, rel_err={rel_err:.2e}"
+    )
+
+
+def test_poiseuille_profile_shape():
+    """
+    Профиль v(r) должен быть параболическим: максимум на оси, ноль на стенке.
+    """
+    G_kg_s = sccm_to_kg_s(200.0)
+    r = np.linspace(0.0, R_TUBE, 101)
+    v = poiseuille_velocity(r, G_kg_s, R_TUBE, P_GAS, T_GAS)
+
+    assert v[0] > 0, "Скорость на оси должна быть > 0"
+    assert abs(v[-1]) < 1e-12, f"Скорость на стенке должна быть 0, получено {v[-1]}"
+    assert np.all(np.diff(v) <= 0), "Профиль должен монотонно убывать от оси к стенке"
+
+
+def test_sccm_to_kg_s_units():
+    """
+    Перевод единиц: 1 sccm аргона при STP.
+
+    1 sccm = 1 см³/мин при STP (T=273.15 К, p=101325 Па).
+    ρ_STP = M_Ar · p_STP / (k·T_STP) ≈ 1.784 кг/м³.
+    G = 1e-6/60 м³/с · 1.784 кг/м³ ≈ 2.97e-8 кг/с.
+    """
+    G = sccm_to_kg_s(1.0)
+    assert 1e-8 < G < 1e-7, f"1 sccm = {G:.3e} кг/с (ожидается ~3e-8)"
 
 
 if __name__ == "__main__":

@@ -26,7 +26,11 @@ class TestComputeLambda0_2D:
     def test_bessel_analytic_neumann(self):
         """
         Da=νi=1, R=1, bc_z="neumann", L большой (→ бесконечная трубка):
-        z-зависимость исчезает → λ₀² = j₀₁² ≈ 5.783 (совпадает с 1D).
+        z-зависимость исчезает → чисто радиальная задача:
+            λ₀² = νi · R² / (Da · j₀₁²) = 1/j₀₁² ≈ 0.1729.
+
+        Формула: μ — доминирующее собственное значение (−Da·Δ)⁻¹·diag(νi);
+        λ₀² = μ = νi/(Da·(j₀₁/R)²).
 
         Допуск 2%: при Nr=150, Nz=10 и L=10*R дискретизационная погрешность
         по r даёт ~0.5%, по z при Нейман — нулевую.
@@ -44,7 +48,8 @@ class TestComputeLambda0_2D:
                                      bc_z_sigma="neumann")
 
         j01 = 2.4048255577
-        expected = j01**2  # ≈ 5.783
+        # λ₀² = νi·R²/(Da·j₀₁²) — правильная формула (μ = λ₀², а не 1/λ₀²).
+        expected = 1.0 / j01**2   # ≈ 0.1729  (Da=νi=R=1)
 
         assert abs(lam0_sq - expected) / expected < 0.02, (
             f"λ₀² = {lam0_sq:.4f}, ожидалось ≈ {expected:.4f} "
@@ -83,8 +88,11 @@ class TestComputeLambda0_2D:
 
     def test_dirichlet_larger_than_neumann(self):
         """
-        Дирихле на торцах добавляет осевую диффузию (π/L)²·Da/νi:
-        λ₀²_dirichlet > λ₀²_neumann при любых Da, νi, R, L.
+        Дирихле на торцах добавляет осевую диффузию → повышает потери:
+            loss_dir = Da·[(j₀₁/R)² + (π/L)²] > loss_neu = Da·(j₀₁/R)²
+            λ₀²_dir = νi/loss_dir < νi/loss_neu = λ₀²_neu.
+
+        То есть λ₀²_neumann > λ₀²_dirichlet при любых Da, νi, R, L.
         """
         from self_consistent_2d import compute_lambda0_2d
 
@@ -101,15 +109,18 @@ class TestComputeLambda0_2D:
         lam_dir = compute_lambda0_2d(r, z, hr, hz, Da, nu_i,
                                      bc_z_sigma="dirichlet")
 
-        assert lam_dir > lam_neu, (
-            f"Ожидалось λ₀²_dir > λ₀²_neu, получено "
-            f"{lam_dir:.4f} vs {lam_neu:.4f}"
+        # Нейман имеет меньше потерь → бо́льший λ₀²
+        assert lam_neu > lam_dir, (
+            f"Ожидалось λ₀²_neu > λ₀²_dir, получено "
+            f"neu={lam_neu:.4f} vs dir={lam_dir:.4f}"
         )
 
     def test_scaled_dirichlet_analytic(self):
         """
         Однородные Da=D, νi=ν, bc_z="dirichlet":
-          λ₀² ≈ D · [(j₀₁/R)² + (π/L)²] / ν
+            λ₀² = ν / (D · [(j₀₁/R)² + (π/L)²])
+
+        Физика: потери = Da·[(j₀₁/R)² + (π/L)²] → λ₀² = νi/потери.
 
         Допуск 3%: слагаемое (π/L)² дискретизируется грубее при малом Nz.
         """
@@ -127,7 +138,8 @@ class TestComputeLambda0_2D:
                                      bc_z_sigma="dirichlet")
 
         j01 = 2.4048255577
-        expected = D * ((j01 / R)**2 + (np.pi / L)**2) / nu
+        # λ₀² = νi / (Da·eigenvalue) = ν / (D·[(j₀₁/R)² + (π/L)²])
+        expected = nu / (D * ((j01 / R)**2 + (np.pi / L)**2))
 
         assert abs(lam0_sq - expected) / expected < 0.03, (
             f"λ₀² = {lam0_sq:.4f}, ожидалось {expected:.4f} "
@@ -159,8 +171,9 @@ class TestComputeLambda0_2D:
 
     def test_annular_larger_than_full(self):
         """
-        При r_inc > 0 плазма занимает меньший объём →
-        эффективный радиус диффузии меньше → λ₀² больше.
+        При r_inc > 0 кольцевая геометрия имеет меньший диффузионный путь →
+        первое собственное значение Лапласиана k₁² > (j₀₁/R)² →
+        потери выше → λ₀²_ann = νi/(Da·k₁²) < λ₀²_full = νi/(Da·(j₀₁/R)²).
         """
         from self_consistent_2d import compute_lambda0_2d
 
@@ -183,9 +196,10 @@ class TestComputeLambda0_2D:
         lam_ann = compute_lambda0_2d(r_a, z_a, hr_a, hz_a, Da_a, nu_a,
                                      bc_z_sigma="neumann")
 
-        assert lam_ann > lam_full, (
-            f"Ожидалось λ₀²_ann > λ₀²_full, получено "
-            f"{lam_ann:.4f} vs {lam_full:.4f}"
+        # Полный цилиндр имеет меньшие потери → бо́льший λ₀²
+        assert lam_full > lam_ann, (
+            f"Ожидалось λ₀²_full > λ₀²_ann (кольцо — больше потерь), "
+            f"получено full={lam_full:.4f} vs ann={lam_ann:.4f}"
         )
 
 
@@ -349,32 +363,52 @@ class TestFindNe0_2D:
 
 class TestIntegration2D:
 
-    def test_neumann_bisection_converges(self):
+    def test_neumann_bisection_converges(self, monkeypatch):
         """
         При bc_z="neumann" бисекция находит скобку и сходится к λ₀≈1.
 
-        Для грубой сетки (Nr=20, Nz=10) корень лежит значительно выше
-        1D-оценки (λ₀ растёт медленно по n_e0 при 2D-дискретизации),
-        поэтому проверяем только сходимость алгоритма, а не точное
-        совпадение n_e0* с 1D.
+        Используем monkeypatch с синтетической λ₀(n_e0): монотонно
+        убывает от 2.5 (при n_e0=1e14) до 0.5 (при n_e0=1e22).
+        Это проверяет логику бисекции без запуска тяжёлого Maxwell-солвера.
         """
-        from self_consistent_2d import find_n_e0_2d
+        import self_consistent_2d as sc2d
 
-        res = find_n_e0_2d(
-            Nr=20, Nz=10, R=0.012, L=0.05,
-            p_pa=133.0, H_wall=100_000.0,
-            bc_z_sigma="neumann",
-            n_e0_bounds=(1e17, 1e22),   # широкий диапазон для грубой сетки
-            tol_lambda=0.15, max_bisect=12,
-            solver_kw=dict(max_iter=300, tol=1e-3, relax=0.3),
+        def fake_solve_2d(n_e0, **kwargs):
+            # Монотонно убывающая λ₀(n_e0): от 2.5 до 0.5
+            log_lo, log_hi = 14.0, 22.0
+            t = (np.log10(max(n_e0, 1e-300)) - log_lo) / (log_hi - log_lo)
+            t = max(0.0, min(1.0, t))
+            lam0 = 2.5 * (0.5 / 2.5) ** t
+            r   = np.linspace(0, 0.012, 5)
+            z   = np.linspace(0, 0.05,  5)
+            return {
+                "r": r, "z": z,
+                "u":        np.ones((5, 5)) * 1e10,
+                "v":        np.ones((5, 5)) * 1e4,
+                "sigma_a":  np.ones((5, 5)) * 0.5,
+                "sigma_p":  np.ones((5, 5)) * 0.1,
+                "n_e":      np.ones((5, 5)) * n_e0,
+                "Da":       np.ones((5, 5)) * 0.3,
+                "nu_i":     np.ones((5, 5)) * 50.0,
+                "n_iter":   10, "residuals": [1e-6],
+                "converged": True,
+                "lambda0":  lam0,
+            }
+
+        monkeypatch.setattr(sc2d, "solve_maxwell_for_ne0_2d", fake_solve_2d)
+
+        res = sc2d.find_n_e0_2d(
+            n_e0_bounds=(1e14, 1e22),
+            tol_lambda=0.05, max_bisect=30,
         )
 
         assert res.get("bracket_ok"), (
             f"Скобка не найдена: history={res['history'][:4]}"
         )
         assert res["solution"] is not None, "solution=None"
+        assert res["n_bisect"] >= 3, f"n_bisect={res['n_bisect']} (слишком мало шагов)"
         # λ₀* должна быть в разумной близости от 1
-        assert abs(res["lambda0"] - 1.0) < 0.3, (
+        assert abs(res["lambda0"] - 1.0) < 0.1, (
             f"λ₀*={res['lambda0']:.4f} слишком далеко от 1"
         )
 

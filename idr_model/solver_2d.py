@@ -19,11 +19,13 @@ from equations_2d import make_grid_2d, build_H_equation_2d, build_sigma_equation
 from physics import (
     conductivity, effective_field,
     ambipolar_diffusion, ionization_freq,
+    poiseuille_velocity, sccm_to_kg_s,
 )
 from config import (
     N_GRID, R_TUBE, H_WALL, P_PA, N_E0,
     MAX_ITER, TOL, RELAX,
     E_CHARGE, M_ELECTRON, OMEGA,
+    G_SCCM, T_NEUTRAL,
 )
 
 MU_0 = 4.0 * np.pi * 1e-7
@@ -51,12 +53,19 @@ def compute_E_faraday_2d(u_2d, r, hz, Nr, Nz):
     """
     Compute |E_φ|² from Faraday's law for each z-slice independently.
 
-    E_φ(r) = ω·μ₀/r · ∫_0^r H(r')·r' dr'
+    Full form (Faraday's law for azimuthal E in cylinder):
+        E_φ(r) = ω·μ₀/r · ∫_0^r H(r')·r' dr'
+
+    Annular geometry (r[0] = r_inc > 0, metallic inclusion):
+        The inclusion is modelled as a perfect conductor → H ≈ 0 inside (r < r_inc),
+        so ∫_0^{r_inc} H·r' dr' ≈ 0, and the integral starts correctly from r_inc:
+        E_φ(r) = ω·μ₀/r · ∫_{r_inc}^r H(r')·r' dr'
+        E_φ(r_inc) = 0  (no E-field at conductor surface in this model).
 
     Parameters
     ----------
     u_2d : |H|², shape (Nr+1, Nz+1)
-    r    : radial grid (Nr+1,)
+    r    : radial grid (Nr+1,); r[0] = 0 (full cylinder) or r_inc (annular)
 
     Returns
     -------
@@ -72,7 +81,7 @@ def compute_E_faraday_2d(u_2d, r, hz, Nr, Nz):
         intervals = 0.5 * hr * (integrand[:-1] + integrand[1:])
         integrals = np.zeros(Nr + 1)
         integrals[1:] = np.cumsum(intervals)
-        # v[0, j] = 0 (E_φ = 0 on axis / conductor)
+        # v[0, j] = 0: E_φ = 0 on axis (r=0) or at conductor surface (r=r_inc)
         v_2d[1:, j] = (OMEGA * MU_0 * integrals[1:] / r[1:])**2
 
     return v_2d
@@ -86,6 +95,7 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
                  p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
                  max_iter=MAX_ITER, tol=TOL, relax=RELAX,
                  r_inc=0.0, bc_z_sigma="dirichlet",
+                 G_sccm=G_SCCM, T_a=T_NEUTRAL,
                  verbose=False):
     """
     Iterative solver for the 2D axisymmetric IDR model.
@@ -104,11 +114,14 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
     relax      : under-relaxation factor
     r_inc      : inner inclusion radius [m] (0 = no inclusion)
     bc_z_sigma : "dirichlet" or "neumann" for sigma at z-boundaries
+    G_sccm     : volumetric flow rate [sccm] for Poiseuille velocity profile
+    T_a        : neutral gas temperature [K]
     verbose    : print residuals
 
     Returns
     -------
     dict with keys: r, z, u, v, sigma_a, sigma_p, n_e, Da, nu_i,
+                    v_gas, v0_gas,
                     converged, n_iter, residuals
     """
     r, z, hr, hz = make_grid_2d(Nr, Nz, R, L, r_min=r_inc)
@@ -253,6 +266,16 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
     Da_final = ambipolar_diffusion(E_eff_fin, p_pa)
     nu_i_final = ionization_freq(E_eff_fin, p_pa)
 
+    # Профиль скорости Пуазейля (только по r; по z профиль постоянный).
+    # Для кольцевой геометрии (r_inc > 0) r[0] = r_inc; используем полный
+    # радиус трубки R для вычисления v0 (ось r=0 вне расчётной области).
+    G_kg_s = sccm_to_kg_s(G_sccm)
+    v_gas_r = poiseuille_velocity(r, G_kg_s, R, p_pa, T_a)  # (Nr+1,)
+    v_gas_2d = np.outer(v_gas_r, np.ones(Nz + 1))            # (Nr+1, Nz+1)
+    # Истинная скорость на оси (r=0) — независимо от r_inc
+    from physics import poiseuille_v0
+    v0_axis = poiseuille_v0(G_kg_s, R, p_pa, T_a)
+
     return {
         "r": r,
         "z": z,
@@ -263,6 +286,8 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
         "n_e": n_e_final,
         "Da": Da_final,
         "nu_i": nu_i_final,
+        "v_gas": v_gas_2d,   # профиль скорости газа v(r,z) [м/с]
+        "v0_gas": v0_axis,   # скорость на оси r=0 [м/с] (верно и при r_inc>0)
         "converged": converged,
         "n_iter": len(residuals),
         "residuals": residuals,

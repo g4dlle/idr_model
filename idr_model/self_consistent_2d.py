@@ -119,7 +119,9 @@ def compute_lambda0_2d(r: np.ndarray, z: np.ndarray,
             return 1e30
 
         mu = inner / norm_old
-        lambda0_sq = 1.0 / mu if abs(mu) > 1e-300 else 1e30
+        # mu — доминирующее собственное значение (−Da·Δ)⁻¹·diag(νi);
+        # λ₀² = μ (аналогично 1D: compute_lambda0 в self_consistent.py).
+        lambda0_sq = mu if abs(mu) > 1e-300 else 1e-30
 
         # Нормируем sigma_new для следующей итерации
         norm_new = float(np.trapezoid(

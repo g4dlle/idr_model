@@ -238,11 +238,13 @@ def plot_midplane_inclusion(results, labels=None,
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
+    r_min_norm = 0.0   # максимальная r_inc/R среди всех кривых
     for i, (res, lbl, s0) in enumerate(zip(results, labels, sigma_0_list)):
         r = res["r"]
         z = res["z"]
         R = r[-1]
         rn = r / R
+        r_min_norm = max(r_min_norm, rn[0])
         j_mid = len(z) // 2
         sa_mid = res["sigma_a"][:, j_mid]
 
@@ -255,6 +257,8 @@ def plot_midplane_inclusion(results, labels=None,
                 color=_COLORS[i % len(_COLORS)],
                 lw=2, label=lbl, zorder=3)
 
+    if r_min_norm > 0:
+        ax.axvspan(0, r_min_norm, color="gray", alpha=0.25, label="inclusion")
     ax.set_xlim(0, 1)
     ax.set_ylim(bottom=0)
     ax.set_xlabel("r / R", fontsize=12)

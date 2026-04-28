@@ -244,6 +244,8 @@ def build_sigma_equation(r: np.ndarray, h: float,
                           nu_i: np.ndarray,
                           sigma_a_ref: np.ndarray | None = None,
                           dt: float | None = None,
+                          v_bohm: float = 0.0,
+                          i_wall: int | None = None,
                           ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Строит трёхдиагональную СЛАУ:
@@ -259,19 +261,22 @@ def build_sigma_equation(r: np.ndarray, h: float,
 
     • sigma_a_ref is not None, dt is None — итерация по мощности (power iteration):
         (−Da·Δ)·σ_new = νi·σ_ref
-      Сходится к фундаментальной моде J₀, но амплитуда зафиксирована через
+      Сходится к фундаментальной моде, но амплитуда зафиксирована через
       нормировку вне этой функции.
 
     • sigma_a_ref is not None, dt is not None — псевдоустановление по времени (IMEX):
         (σ_new − σ_old)/dt = (1/r)·d/dr(r·Da·dσ_new/dr) + νi·σ_old
       Диффузия неявная (устойчиво), ионизация явная.
-      При сходимости σ_new → σ_old, что соответствует физическому равновесию
-        (1/r)·d/dr(r·Da·dσ/dr) + νi·σ = 0.
-      Амплитуда эволюционирует самосогласованно до баланса νi = λ₁·Da.
 
     Граничные условия:
       r=0: dσ/dr = 0  (ghost node / правило Лопиталя)
-      r=R: σ[N]  = 0  (Дирихле, рекомбинация на стенке)
+      r=R_eff: ГУ определяется параметром v_bohm:
+        v_bohm = 0  →  Дирихле: σ[i_wall] = 0  (идеальная рекомбинация)
+        v_bohm > 0  →  Бомовское (ГУ 3-го рода):
+                          -Da·dσ/dr = v_bohm·σ  при r=R_eff
+                       Дискретно: Da/h·σ[i_wall-1] - (Da/h + v_bohm)·σ[i_wall] = 0
+                       Физический смысл: поток к стенке = Бомовский поток.
+      r > R_eff: σ[i] = 0 (область оболочки, плазмы нет)
 
     Parameters
     ----------
@@ -281,12 +286,20 @@ def build_sigma_equation(r: np.ndarray, h: float,
     nu_i       : частота ионизации (N+1,) [с⁻¹]
     sigma_a_ref: профиль σ с предыдущего шага (N+1,); None → однородная форма
     dt         : шаг псевдо-времени [с]; None → без временного члена
+    v_bohm     : скорость Бома [м/с]; 0 → Дирихле σ(R_eff)=0
+    i_wall     : индекс граничного узла плазмы; None → N (стенка трубки).
+                 При i_wall < N — плазма ограничена r[i_wall] < R; оболочка
+                 [r[i_wall], R] задаётся уравнениями σ[i] = 0.
 
     Returns
     -------
     lower, main, upper, rhs : компоненты трёхдиагональной системы (N+1,)
     """
     N = len(r) - 1
+    if i_wall is None:
+        i_wall = N
+    i_wall = max(1, min(i_wall, N))   # защита от выхода за пределы
+
     lower = np.zeros(N + 1)
     main  = np.zeros(N + 1)
     upper = np.zeros(N + 1)
@@ -322,8 +335,8 @@ def build_sigma_equation(r: np.ndarray, h: float,
             rhs[0]   = 0.0
         upper[0] = -2.0 * Dp0 / h**2
 
-    # ── Внутренние узлы i = 1 .. N-1 ─────────────────────────────────────────
-    for i in range(1, N):
+    # ── Внутренние узлы i = 1 .. i_wall-1 ────────────────────────────────────
+    for i in range(1, i_wall):
         rp = r_half_plus[i]
         rm = r_half_minus[i]
         Dp = Da_half[i]
@@ -343,10 +356,26 @@ def build_sigma_equation(r: np.ndarray, h: float,
             main[i]  =  coef * (rp * Dp + rm * Dm) - nu_i[i]
             rhs[i]   = 0.0
 
-    # ── Граничное условие r=R (Дирихле σ=0) ──────────────────────────────────
-    lower[N] = 0.0
-    main[N]  = 1.0
-    upper[N] = 0.0
-    rhs[N]   = 0.0
+    # ── Граничное условие r = r[i_wall] ───────────────────────────────────────
+    if v_bohm > 0.0:
+        # ГУ 3-го рода (Бомовское):  -Da·dσ/dr = v_bohm·σ  при r=r[i_wall]
+        Da_half_iw = Da_half[i_wall - 1]
+        lower[i_wall] =  Da_half_iw / h
+        main[i_wall]  = -(Da_half_iw / h + v_bohm)
+        upper[i_wall] = 0.0
+        rhs[i_wall]   = 0.0
+    else:
+        # ГУ 1-го рода (Дирихле):  σ[i_wall] = 0
+        lower[i_wall] = 0.0
+        main[i_wall]  = 1.0
+        upper[i_wall] = 0.0
+        rhs[i_wall]   = 0.0
+
+    # ── Оболочка: σ[i] = 0  для i > i_wall ───────────────────────────────────
+    for i in range(i_wall + 1, N + 1):
+        lower[i] = 0.0
+        main[i]  = 1.0
+        upper[i] = 0.0
+        rhs[i]   = 0.0
 
     return lower, main, upper, rhs

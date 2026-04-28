@@ -15,6 +15,7 @@ from solver import thomas_solve, compute_alpha
 from physics import (
     conductivity, effective_field,
     ambipolar_diffusion, ionization_freq,
+    bohm_velocity,
 )
 from boundary import apply_wall_sigma
 from config import (
@@ -34,43 +35,59 @@ MU_0 = 4.0 * np.pi * 1e-7
 def compute_lambda0(r: np.ndarray, h: float,
                     Da: np.ndarray, nu_i: np.ndarray,
                     max_power_iter: int = 300,
-                    tol: float = 1e-8) -> float:
+                    tol: float = 1e-8,
+                    v_bohm: float = 0.0,
+                    i_wall: int | None = None) -> float:
     """
     Вычисляет собственное значение λ₀² для уравнения баланса частиц:
 
         (1/r) d/dr(r · Da · dσ/dr) + (νi / λ₀²) · σ = 0
-        σ(R) = 0,  dσ/dr(0) = 0
+
+    Граничные условия:
+        dσ/dr(0) = 0  (симметрия)
+        σ(r[i_wall]) = 0   (Дирихле, по умолчанию i_wall = N → r=R)
+        σ[i] = 0 для i > i_wall  (оболочка)
 
     Метод: степенная итерация (power iteration).
-    λ₀² = 1/μ, где μ — доминирующее собственное значение M = (-Da·Δ)⁻¹·diag(νi).
+    λ₀² = μ, где μ — доминирующее собственное значение M = (-Da·Δ)⁻¹·diag(νi).
 
     Returns
     -------
     lambda0_sq : λ₀² (> 0)
     """
     N = len(r) - 1
-    sigma = np.maximum(1.0 - (r / r[-1])**2, 0.0)
-    sigma[-1] = 0.0
+    if i_wall is None:
+        i_wall = N
+    i_wall = max(1, min(i_wall, N))
+
+    sigma = np.maximum(1.0 - (r / r[i_wall])**2, 0.0)
+    sigma[i_wall:] = 0.0   # оболочка + стенка
 
     lambda0_sq_prev = 0.0
 
     for iteration in range(max_power_iter):
         l, m, up, rhs = build_sigma_equation(r, h, Da, nu_i,
-                                              sigma_a_ref=sigma)
+                                              sigma_a_ref=sigma,
+                                              v_bohm=v_bohm,
+                                              i_wall=i_wall)
         sigma_new = thomas_solve(l, m, up, rhs)
         sigma_new = np.maximum(sigma_new, 0.0)
-        sigma_new[-1] = 0.0
+        sigma_new[i_wall:] = 0.0   # принудительно обнуляем оболочку
 
-        norm_old = np.trapezoid(sigma[:-1]**2 * r[:-1], r[:-1])
-        inner_product = np.trapezoid(sigma[:-1] * sigma_new[:-1] * r[:-1], r[:-1])
+        # Интегрируем только по плазменной области [0, r[i_wall])
+        norm_old      = np.trapezoid(sigma[:i_wall]**2 * r[:i_wall], r[:i_wall])
+        inner_product = np.trapezoid(sigma[:i_wall] * sigma_new[:i_wall] * r[:i_wall],
+                                     r[:i_wall])
 
         if norm_old < 1e-300:
             return 1e30
 
         mu = inner_product / norm_old
-        lambda0_sq = 1.0 / mu if abs(mu) > 1e-300 else 1e30
+        # mu — доминирующее собственное значение A⁻¹·B, где A=−Da·Δ, B=diag(νi).
+        # λ₀² = γ = mu. При пороге (νi = Da·λ₁²/R²): mu = 1 → λ₀ = 1. ✓
+        lambda0_sq = mu if abs(mu) > 1e-300 else 1e-30
 
-        norm_new = np.trapezoid(sigma_new[:-1]**2 * r[:-1], r[:-1])
+        norm_new = np.trapezoid(sigma_new[:i_wall]**2 * r[:i_wall], r[:i_wall])
         if norm_new > 1e-300:
             sigma = sigma_new * np.sqrt(norm_old / norm_new)
         else:
@@ -95,6 +112,8 @@ def solve_maxwell_for_ne0(n_e0: float,
                           max_iter: int = MAX_ITER,
                           tol: float = TOL,
                           relax: float = RELAX,
+                          v_bohm: float = 0.0,
+                          delta_sheath: float = 0.0,
                           ) -> dict:
     """
     Решает уравнения Максвелла самосогласованно с профилем n_e(r),
@@ -109,9 +128,19 @@ def solve_maxwell_for_ne0(n_e0: float,
     """
     r, h = make_grid(N, R)
 
-    # Начальный профиль n_e: J₀-подобный, амплитуда = n_e0
-    n_e_shape = np.maximum(1.0 - (r / R)**2, 0.0)
-    n_e_shape[-1] = 0.0
+    # Индекс граничного узла плазмы (оболочка: r > r[i_wall])
+    # delta_sheath = 0 → i_wall = N (стандартное ГУ на стенке)
+    # delta_sheath > 0 → плазма ограничена r_eff = R − delta_sheath
+    if delta_sheath > 0.0:
+        r_eff  = R - delta_sheath
+        i_wall = int(np.searchsorted(r, r_eff, side='right')) - 1
+        i_wall = max(1, min(i_wall, N - 1))
+    else:
+        i_wall = N
+
+    # Начальный профиль n_e: параболический, амплитуда = n_e0
+    n_e_shape = np.maximum(1.0 - (r / r[i_wall])**2, 0.0)
+    n_e_shape[i_wall:] = 0.0
     n_e = n_e0 * n_e_shape
 
     sigma_a, sigma_p, _ = conductivity(n_e, p_pa)
@@ -129,9 +158,34 @@ def solve_maxwell_for_ne0(n_e0: float,
         if np.all(alpha == 0):
             alpha = np.full(N + 1, 1e-10)
 
+        # В оболочке (i >= i_wall) плазмы нет → H = H_wall (вакуум).
+        # Чтобы матрица H-уравнения была невырожденной, используем
+        # Дирихле на i_wall и тождественные строки для i > i_wall.
+        # Для этого патчим alpha: в шeathe ставим малое значение;
+        # после решения перекрываем u в шeathe значением H_wall².
+        if i_wall < N:
+            alpha[i_wall:] = np.maximum(alpha[i_wall:], 1e-12)
+
         l, m, up, rhs_h = build_H_equation(r, h, alpha, sigma_a, v, H_wall**2)
+
+        # Дирихле H² = H_wall² на i_wall (граница плазма–оболочка)
+        if i_wall < N:
+            l[i_wall] = 0.0
+            m[i_wall] = 1.0
+            up[i_wall] = 0.0
+            rhs_h[i_wall] = H_wall**2
+            # Для i > i_wall: u[i] = H_wall² (вакуум, H не изменяется)
+            for i in range(i_wall + 1, N + 1):
+                l[i] = 0.0
+                m[i] = 1.0
+                up[i] = 0.0
+                rhs_h[i] = H_wall**2
+
         u_new = thomas_solve(l, m, up, rhs_h)
         u_new = np.maximum(u_new, 0.0)
+        # Явно фиксируем H² в оболочке
+        if i_wall < N:
+            u_new[i_wall:] = H_wall**2
 
         # (b) E_phi из закона Фарадея
         H_abs = np.sqrt(np.maximum(u_new, 0.0))
@@ -149,22 +203,25 @@ def solve_maxwell_for_ne0(n_e0: float,
         nu_i = ionization_freq(E_eff, p_pa)
 
         # (d) Обновление ФОРМЫ профиля n_e через power iteration на σ.
-        #     Используем Da, νi из текущего поля.
         #     Power iteration: (-Da·Δ)·σ_new = νi·σ_old
-        #     σ_old  = σ_a (текущий).
+        #     При v_bohm > 0: ГУ 3-го рода на стенке (σ_new[-1] ≠ 0).
         l_s, m_s, up_s, rhs_s = build_sigma_equation(r, h, Da, nu_i,
-                                                       sigma_a_ref=sigma_a)
+                                                       sigma_a_ref=sigma_a,
+                                                       v_bohm=v_bohm,
+                                                       i_wall=i_wall)
         sigma_raw = thomas_solve(l_s, m_s, up_s, rhs_s)
         sigma_raw = np.maximum(sigma_raw, 0.0)
-        apply_wall_sigma(sigma_raw)
+        sigma_raw[i_wall:] = 0.0   # оболочка всегда обнулена
+        if v_bohm == 0.0 and i_wall == N:
+            apply_wall_sigma(sigma_raw)   # Дирихле на физической стенке
 
-        # Извлекаем ФОРМУ профиля: нормируем к макс. = 1
-        shape_max = np.max(sigma_raw[:-1])
+        # Извлекаем ФОРМУ профиля: нормируем к максимуму внутри плазмы
+        shape_max = np.max(sigma_raw[:i_wall]) if i_wall > 0 else 0.0
         if shape_max > 1e-300:
             n_e_shape_new = sigma_raw / shape_max
         else:
-            n_e_shape_new = np.maximum(1.0 - (r / R)**2, 0.0)
-        n_e_shape_new[-1] = 0.0
+            n_e_shape_new = np.maximum(1.0 - (r / r[i_wall])**2, 0.0)
+        n_e_shape_new[i_wall:] = 0.0   # оболочка
 
         # n_e с фиксированной амплитудой n_e0
         n_e_new = n_e0 * n_e_shape_new
@@ -203,21 +260,21 @@ def solve_maxwell_for_ne0(n_e0: float,
             break
 
     # Финальные величины.
-    # n_e восстанавливается из релаксированного sigma_a (σ ∝ n_e при фикс. E),
-    # чтобы n_e и sigma_a были взаимно согласованы даже при ранней остановке.
-    sigma_a_fin_max = np.max(sigma_a[:-1])
+    # n_e восстанавливается из релаксированного sigma_a (σ ∝ n_e при фикс. E).
+    sigma_a_fin_max = np.max(sigma_a[:i_wall]) if i_wall > 0 else 0.0
     if sigma_a_fin_max > 1e-300:
         n_e_final = n_e0 * sigma_a / sigma_a_fin_max
     else:
-        n_e_final = n_e0 * np.maximum(1.0 - (r / R)**2, 0.0)
-    n_e_final[-1] = 0.0
+        n_e_final = n_e0 * np.maximum(1.0 - (r / r[i_wall])**2, 0.0)
+    n_e_final[i_wall:] = 0.0   # оболочка: n_e=0
 
     E_eff_fin  = effective_field(np.sqrt(v), p_pa)
     Da_final   = ambipolar_diffusion(E_eff_fin, p_pa)
     nu_i_final = ionization_freq(E_eff_fin, p_pa)
 
-    # λ₀
-    lambda0_sq = compute_lambda0(r, h, Da_final, nu_i_final)
+    # λ₀ вычисляется с тем же ГУ и i_wall, что и в основном решателе
+    lambda0_sq = compute_lambda0(r, h, Da_final, nu_i_final,
+                                 v_bohm=v_bohm, i_wall=i_wall)
     lambda0 = np.sqrt(max(lambda0_sq, 0.0))
 
     return {
@@ -253,14 +310,19 @@ def find_n_e0(N: int = N_GRID,
     """
     Бисекция в log-пространстве по n_e0: находит n_e0* с λ₀(n_e0) = 1.
 
-    Физика: 
-    λ₀² стоит в знаменателе: div(Da grad n) + (νi / λ₀²) n = 0.
-    - При λ₀ < 1: мы искусственно "увеличили" νi (поделив на λ₀²<1),
-      значит реальная ионизация слишком слаба (ионизация < диффузии).
-      Нужно увеличить n_e0 → усилить скин-эффект → E вытесняется к стенке,
-      но из-за резкого градиента H там E становится огромным → скачок ионизации.
-    - При λ₀ > 1: реальная ионизация избыточна (ионизация > диффузии).
-      Нужно уменьшить n_e0.
+    Физика (после исправления формулы λ₀² = μ в compute_lambda0):
+    λ₀² = μ = доминирующее собственное значение (−Da·Δ)⁻¹·diag(νi).
+    Для однородного случая: λ₀² = νi · R² / (Da · λ₁²).
+
+    - При λ₀ > 1: ионизация избыточна (νi > Da·λ₁²/R²) → плазма растёт.
+      Нужно уменьшить n_e0 → усилить скин-эффект → E внутри падает → νi ↓.
+    - При λ₀ < 1: ионизация недостаточна (νi < Da·λ₁²/R²) → плазма гаснет.
+      Нужно увеличить n_e0.
+    - При λ₀ = 1: самосогласованное равновесие.
+
+    Примечание: монотонность λ₀(n_e0) обеспечивается тем, что рост n_e0
+    усиливает скин-эффект и уменьшает E_eff внутри → νi падает → λ₀ убывает.
+    Бисекция ищет переход λ₀ > 1 → λ₀ < 1.
 
     Returns dict: n_e0, lambda0, converged, n_bisect, solution, history
     """

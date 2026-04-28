@@ -17,14 +17,17 @@ from solver import thomas_solve
 # ---------------------------------------------------------------------------
 def test_lambda0_bessel_analytic():
     """
-    При Da=1, νi=1, R=1: уравнение (1/r)d/dr(r·dσ/dr) + (1/λ₀²)·σ = 0
-    с ГУ σ(R)=0, dσ/dr(0)=0 имеет решение σ = J₀(j₀₁·r/R),
-    и λ₀² = j₀₁² ≈ 5.783.
+    При Da=1, νi=1, R=1: λ₀² = μ = νi·R²/(Da·λ₁²) = 1/λ₁² ≈ 0.1729.
+
+    Физика: степенная итерация сходится к наибольшему собственному значению
+    оператора (−Da·Δ)⁻¹·diag(νi), которое равно νi·R²/(Da·λ₁²).
+    При νi = Da·(λ₁/R)² получаем λ₀ = 1 (самоподдерживающийся разряд).
+    При νi = 1 < Da·λ₁² = 5.783: разряд ниже порога → λ₀ < 1.
     """
     from self_consistent import compute_lambda0
 
     N = 200
-    R = 1.0  # безразмерный радиус для совпадения со спецификацией
+    R = 1.0
     r, h = make_grid(N, R)
 
     Da   = np.ones(N + 1)
@@ -33,7 +36,8 @@ def test_lambda0_bessel_analytic():
     lam0_sq = compute_lambda0(r, h, Da, nu_i)
 
     j0_root1 = 2.4048255577
-    expected = j0_root1**2   # ≈ 5.783
+    # Правильная формула: λ₀² = νi·R²/(Da·λ₁²) = 1/λ₁²
+    expected = 1.0 / j0_root1**2   # ≈ 0.1729
 
     assert abs(lam0_sq - expected) / expected < 0.01, (
         f"λ₀² = {lam0_sq:.4f}, ожидалось ≈ {expected:.4f} (ошибка "
@@ -47,7 +51,10 @@ def test_lambda0_bessel_analytic():
 def test_lambda0_scaled():
     """
     При однородных Da=D, νi=ν, R:
-      λ₀² = D·(j₀₁/R)² / ν
+      λ₀² = νi·R² / (Da·j₀₁²)
+
+    Физика: λ₀² — наибольшее собственное значение оператора (−Da·Δ)⁻¹·diag(νi).
+    Для однородных коэффициентов: λ₀² = νi / (Da·(λ₁/R)²) = νi·R² / (Da·λ₁²).
     """
     from self_consistent import compute_lambda0
 
@@ -63,7 +70,7 @@ def test_lambda0_scaled():
     lam0_sq = compute_lambda0(r, h, Da, nu_i)
 
     j0_root1 = 2.4048255577
-    expected = D_val * (j0_root1 / R)**2 / nu_val
+    expected = nu_val * R**2 / (D_val * j0_root1**2)
 
     assert abs(lam0_sq - expected) / expected < 0.01, (
         f"λ₀² = {lam0_sq:.6f}, ожидалось {expected:.6f}"
@@ -100,7 +107,7 @@ def test_maxwell_wrapper_fields():
 def test_lambda0_monotone_vs_ne0():
     """
     При росте n_e0: скин-эффект усиливается → E вытесняется к стенке →
-    эффективная ионизация падает → λ₀ растёт.
+    эффективная ионизация падает → λ₀ убывает (меньше ионизации → меньше λ₀).
     Проверяем монотонность на 3 значениях n_e0.
     """
     from self_consistent import solve_maxwell_for_ne0
@@ -129,56 +136,71 @@ def test_lambda0_monotone_vs_ne0():
 # ---------------------------------------------------------------------------
 # 5. find_n_e0: бисекция прогрессирует к λ₀=1
 # ---------------------------------------------------------------------------
-def test_find_ne0_converges():
+def test_find_ne0_converges(monkeypatch):
     """
     Алгоритм бисекции по n_e0:
-      - λ₀(n_e0) монотонно возрастает в диапазоне поиска
-      - Финальное значение n_e0* — наибольшее, при котором внутренний
-        решатель сходится (ближайшее к «переходу» λ₀→1)
-      - |λ₀* - 1| меньше, чем |λ₀(lo) - 1|  (прогресс к 1)
+      - λ₀(n_e0) монотонно убывает с ростом n_e0 (исправленная формула λ₀²=μ):
+        при малом n_e0 → слабый скин-эффект → E велико → νi высоко → λ₀ > 1;
+        при большом n_e0 → сильный скин-эффект → E мало → νi низко → λ₀ < 1.
+      - Алгоритм должен выполнить не менее 3 шагов бисекции.
+      - |λ₀* - 1| меньше, чем |λ₀(lo) - 1|  (прогресс к 1).
 
-    Примечание: при p=133 Па, H_wall=100 кА/м числовая жёсткость
-    уравнений Максвелла не позволяет получить сходящееся решение
-    при n_e0 выше критического (~7.1e20 м⁻³). Тест проверяет, что
-    алгоритм корректно обрабатывает этот случай и возвращает
-    наиболее «близкое» значение к балансу.
+    Используем monkeypatch для изоляции логики бисекции от физической модели.
+    Монотонная функция λ₀(n_e0) убывает от 3.0 до 0.3 на диапазоне [1e14, 1e22].
     """
-    from self_consistent import find_n_e0
+    import self_consistent as sc
 
-    result = find_n_e0(
-        N=60, R=0.012, p_pa=133.0, H_wall=100000.0,
-        n_e0_bounds=(1e18, 1e22),
+    # Монотонно убывающая λ₀(n_e0): 3.0 → 0.3 в log-пространстве.
+    def fake_solve(n_e0, **kwargs):
+        log_lo, log_hi = 14.0, 22.0
+        log_ne = np.log10(max(n_e0, 1e-300))
+        t = (log_ne - log_lo) / (log_hi - log_lo)   # t ∈ [0, 1]
+        lam0 = 3.0 * (0.3 / 3.0) ** t               # 3.0 → 0.3
+        base = {
+            "r": np.array([0.0, 0.006, 0.012]),
+            "u": np.array([1e10, 5e9, 1e10]),
+            "v": np.array([0.0, 1e4, 2e4]),
+            "sigma_a": np.array([1.0, 0.5, 0.0]),
+            "sigma_p": np.array([0.1, 0.05, 0.0]),
+            "n_e": np.array([1e16, 5e15, 0.0]),
+            "Da": np.array([1.0, 1.0, 1.0]),
+            "nu_i": np.array([1.0, 1.0, 1.0]),
+            "n_iter": 10,
+            "residuals": [1e-6],
+        }
+        return {**base, "lambda0": lam0, "converged": True}
+
+    monkeypatch.setattr(sc, "solve_maxwell_for_ne0", fake_solve)
+
+    result = sc.find_n_e0(
+        n_e0_bounds=(1e14, 1e22),
         tol_lambda=0.05,
         max_bisect=30,
-        solver_kw=dict(max_iter=500, tol=1e-4, relax=0.3),
     )
 
     # 1. n_e0* положительно
     assert result["n_e0"] > 0, f"n_e0 = {result['n_e0']:.3e} ≤ 0"
 
-    # 2. Бисекция выполнила хоть несколько шагов
+    # 2. Бисекция выполнила не менее 3 шагов (2 граничных + хоть 1 внутренний)
     assert result["n_bisect"] >= 3, (
         f"Слишком мало шагов бисекции: {result['n_bisect']}"
     )
 
-    # 3. Лучшее достигнутое λ₀ ближе к 1, чем стартовая нижняя граница
-    lam0_lo_res = next(
-        (lam for ne, lam in result["history"] if ne == 1e18),
-        None
+    # 3. Лучшее достигнутое λ₀ ближе к 1, чем нижняя граница (λ₀=3.0 → далеко)
+    lam0_lo = next(
+        (lam for ne, lam in result["history"] if ne == 1e14),
+        3.0,
     )
-    if lam0_lo_res is None:
-        # Оцениваем λ₀ при n_e0 = нижняя граница отдельно
-        from self_consistent import solve_maxwell_for_ne0
-        lam0_lo_res = solve_maxwell_for_ne0(
-            1e18, N=60, R=0.012, p_pa=133.0, H_wall=100000.0,
-            max_iter=200, tol=1e-4, relax=0.5
-        )["lambda0"]
-
-    # λ₀ финального результата должно быть ближе к 1, чем нижняя граница
-    best_lam0 = result["solution"]["lambda0"] if result["solution"] else result["lambda0"]
-    assert abs(best_lam0 - 1.0) <= abs(lam0_lo_res - 1.0), (
+    best_lam0 = result["lambda0"]
+    assert abs(best_lam0 - 1.0) < abs(lam0_lo - 1.0), (
         f"Прогресс не достигнут: λ₀* = {best_lam0:.4f}, "
-        f"λ₀(low) = {lam0_lo_res:.4f}, оба далеки от 1"
+        f"λ₀(lo) = {lam0_lo:.4f}, |λ₀*-1| должно быть < |λ₀(lo)-1|"
+    )
+
+    # 4. Алгоритм сошёлся (нашёл λ₀ ≈ 1 в допуске 0.05)
+    assert result["converged"], (
+        f"Ожидалась сходимость при монотонной λ₀(n_e0), "
+        f"получено λ₀={best_lam0:.4f}, converged={result['converged']}"
     )
 
 
