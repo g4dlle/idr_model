@@ -4,6 +4,7 @@ postprocess_2d.py -- visualization for the 2D axisymmetric IDR model.
 Provides contour plots (r, z) for all fields and midplane comparison with 1D.
 """
 
+import csv
 import numpy as np
 
 try:
@@ -171,6 +172,152 @@ def plot_midplane(result_2d, result_1d=None, save=None):
         ax.set_ylabel(ylabel)
         ax.set_xlim(0, 1)
         ax.legend()
+
+    fig.tight_layout()
+    _save_or_show(fig, save)
+
+
+def _interp_1d_to_2d_grid(result_1d, r_2d, key):
+    """Interpolate a 1D profile to the 2D radial grid."""
+    r_1d = result_1d["r"]
+    return np.interp(r_2d, r_1d, result_1d[key])
+
+
+def compare_midplane_1d_2d(result_2d, result_1d):
+    """
+    Compare 1D profiles with the 2D central section z = L/2.
+
+    Returns a dict with relative max and L2 mismatches for H(r), E(r),
+    sigma_a(r), and n_e(r). H and E are compared as amplitudes, not squares.
+    """
+    r = result_2d["r"]
+    z = result_2d["z"]
+    j_mid = len(z) // 2
+    r_col = r
+
+    profiles = {
+        "H": (
+            np.sqrt(np.maximum(result_2d["u"][:, j_mid], 0.0)),
+            np.sqrt(np.maximum(_interp_1d_to_2d_grid(result_1d, r, "u"), 0.0)),
+            "A/m",
+        ),
+        "E": (
+            np.sqrt(np.maximum(result_2d["v"][:, j_mid], 0.0)),
+            np.sqrt(np.maximum(_interp_1d_to_2d_grid(result_1d, r, "v"), 0.0)),
+            "V/m",
+        ),
+        "sigma_a": (
+            result_2d["sigma_a"][:, j_mid],
+            _interp_1d_to_2d_grid(result_1d, r, "sigma_a"),
+            "S/m",
+        ),
+        "n_e": (
+            result_2d["n_e"][:, j_mid],
+            _interp_1d_to_2d_grid(result_1d, r, "n_e"),
+            "m^-3",
+        ),
+    }
+
+    metrics = {}
+    for name, (y2, y1, unit) in profiles.items():
+        diff = y2 - y1
+        scale = max(float(np.max(np.abs(y1))), float(np.max(np.abs(y2))), 1e-300)
+        l2_num = float(np.trapezoid(diff**2 * r_col, r_col))
+        l2_den = max(float(np.trapezoid(y1**2 * r_col, r_col)), 1e-300)
+        metrics[name] = {
+            "unit": unit,
+            "max_1d": float(np.max(y1)),
+            "max_2d": float(np.max(y2)),
+            "rel_max": float(np.max(np.abs(diff)) / scale),
+            "rel_l2": float(np.sqrt(l2_num / l2_den)),
+        }
+    return metrics
+
+
+def print_midplane_comparison(metrics):
+    """Print a compact 1D-vs-2D central-section mismatch table."""
+    print("\n1D vs 2D comparison at central section z=L/2:")
+    print("-" * 86)
+    print(f"{'field':>10} | {'max 1D':>13} | {'max 2D':>13} | "
+          f"{'max mismatch':>13} | {'L2 mismatch':>13}")
+    print("-" * 86)
+    for key in ("H", "E", "sigma_a", "n_e"):
+        m = metrics[key]
+        print(f"{key:>10} | {m['max_1d']:13.4e} | {m['max_2d']:13.4e} | "
+              f"{100*m['rel_max']:12.2f}% | {100*m['rel_l2']:12.2f}%")
+    print("-" * 86)
+
+
+def save_midplane_comparison_csv(metrics, path):
+    """Save central-section mismatch metrics to CSV."""
+    if path is None:
+        return
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["field", "unit", "max_1d", "max_2d",
+                         "rel_max", "rel_l2"])
+        for key in ("H", "E", "sigma_a", "n_e"):
+            m = metrics[key]
+            writer.writerow([key, m["unit"], m["max_1d"], m["max_2d"],
+                             m["rel_max"], m["rel_l2"]])
+    print(f"  [csv] saved: {path}")
+
+
+def plot_midplane_detailed(result_2d, result_1d, metrics=None, save=None):
+    """
+    Four-panel central-section comparison: H, E, sigma_a, n_e.
+
+    2D profiles are taken at z = L/2; 1D profiles are interpolated only for
+    metric computation, while plotting uses their native grids.
+    """
+    if not HAS_MPL:
+        return
+    _apply_style()
+
+    r2 = result_2d["r"]
+    z = result_2d["z"]
+    j_mid = len(z) // 2
+    rn2 = r2 / r2[-1]
+    r1 = result_1d["r"]
+    rn1 = r1 / r1[-1]
+
+    fields = [
+        ("H", r"$|H|$  [A/m]",
+         np.sqrt(np.maximum(result_2d["u"][:, j_mid], 0.0)),
+         np.sqrt(np.maximum(result_1d["u"], 0.0))),
+        ("E", r"$|E_\varphi|$  [V/m]",
+         np.sqrt(np.maximum(result_2d["v"][:, j_mid], 0.0)),
+         np.sqrt(np.maximum(result_1d["v"], 0.0))),
+        ("sigma_a", r"$\sigma_a$  [S/m]",
+         result_2d["sigma_a"][:, j_mid],
+         result_1d["sigma_a"]),
+        ("n_e", r"$n_e$  [m$^{-3}$]",
+         result_2d["n_e"][:, j_mid],
+         result_1d["n_e"]),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    axes = axes.ravel()
+    fig.suptitle(f"1D vs 2D central section  (z = {z[j_mid]*1e3:.1f} mm)",
+                 fontsize=13, fontweight="bold")
+
+    for ax, (key, ylabel, y2, y1) in zip(axes, fields):
+        ax.plot(rn1, y1, "r--", lw=1.8, label="1D")
+        ax.plot(rn2, y2, "b-", lw=2.0, label="2D, z=L/2")
+        ax.set_xlabel("r / R")
+        ax.set_ylabel(ylabel)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(bottom=0)
+        ax.set_title(key)
+        ax.legend(fontsize=9)
+        if metrics is not None and key in metrics:
+            ax.text(0.97, 0.94,
+                    f"max: {100*metrics[key]['rel_max']:.1f}%\n"
+                    f"L2: {100*metrics[key]['rel_l2']:.1f}%",
+                    transform=ax.transAxes,
+                    ha="right", va="top", fontsize=9,
+                    bbox=dict(boxstyle="round,pad=0.25",
+                              fc="white", alpha=0.85))
 
     fig.tight_layout()
     _save_or_show(fig, save)

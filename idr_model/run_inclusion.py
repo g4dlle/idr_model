@@ -20,6 +20,8 @@ import os
 import argparse
 import numpy as np
 
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 # Allow running from the idr_model/ directory directly
 sys.path.insert(0, os.path.dirname(__file__))
 

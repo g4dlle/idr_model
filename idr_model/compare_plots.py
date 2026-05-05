@@ -57,10 +57,6 @@ exp_233_j  = np.array([0.00, 0.39, 1.51, 1.82, 1.83])     # ×10⁶ А/м²
 exp_241_P  = np.array([0.73, 0.98, 1.17, 1.34])            # кВт
 exp_241_ne = np.array([1.97, 6.93, 19.07, 53.37]) * 1e15   # м⁻³
 
-# Рис. 2.38 — n_e vs p при P_p=1.5 кВт, аргон, кривая 4
-exp_238_p  = np.array([27.94, 46.74, 118.91, 160.85, 221.84, 262.87])  # Па
-exp_238_ne = np.array([1.37, 1.55, 3.21, 3.71, 1.98, 1.16]) * 1e16    # м⁻³
-
 # Рис. 2.34 — j_φ(z) — ВЧИ, аргон, G=0 (кривая 1)
 exp_234_z  = np.array([-176.87, -119.64, -61.10, 32.55])   # мм
 exp_234_j  = np.array([0.69, 1.88, 0.38, 0.0])             # ×10⁶ А/м²
@@ -211,6 +207,71 @@ def n_e_two_balance(p_pa: float, P_pp: float = 1500.0,
     return P_pp * m_e * nu_c / (2.0 * e**2 * E_eff**2 * V_eff)
 
 
+def compute_H_threshold_sc(p_pa: float,
+                           H_lo: float = 3e3, H_hi: float = 6e5,
+                           N: int = 40, tol_inner: float = 5e-3) -> float:
+    """
+    Самосогласованный порог H_wall, при котором λ₀ = 1.
+
+    Отличается от threshold_Hwall тем, что учитывает профиль E_φ(r) ∝ r
+    через power iteration в solve_maxwell_for_ne0.
+    При δ >> R λ₀ не зависит от n_e0 → используем n_e0 = 1e14.
+
+    Returns
+    -------
+    H_threshold в А/м, или np.nan если λ₀ не пересекает 1 в [H_lo, H_hi].
+    """
+    def lam_minus1(H):
+        res = solve_maxwell_for_ne0(n_e0=1e14, N=N, R=R, p_pa=p_pa,
+                                    H_wall=H, max_iter=150, tol=tol_inner)
+        return res["lambda0"] - 1.0
+
+    H_scan = np.logspace(np.log10(H_lo), np.log10(H_hi), 14)
+    vals   = [lam_minus1(H) for H in H_scan]
+    for i in range(len(vals) - 1):
+        if vals[i] * vals[i + 1] < 0:
+            return float(brentq(lam_minus1, H_scan[i], H_scan[i + 1],
+                                xtol=200, maxiter=12))
+    return np.nan
+
+
+def n_e_sc_model(p_pa: float, P_pp: float = 1500.0) -> float:
+    """
+    n_e из самосогласованного двухбалансного расчёта при P_pp = const.
+
+    Шаги:
+      1. Из самосогласованного условия λ₀ = 1 → H_threshold(p)
+         (учитывает профиль E_φ(r) ∝ r через power iteration).
+      2. Баланс мощности при H_threshold:
+            P_pp = σ_a · <E_φ²>_t,V · πR²L
+         Для E_φ(r) = ωμ₀H·r/2 и времени: <E_φ²>_{t,V} = E_wall²/4
+            → P = σ_a · (ωμ₀H·R/2)²/4 · πR²L
+            → n_e = 4P · m_e(νc²+ω²) / (e² · νc · E_wall² · πR²L)
+
+    При δ >> R (все эксп. условия): нет скин-эффекта, E не экранируется.
+
+    Returns
+    -------
+    (n_e [м⁻³], H_threshold [А/м]) или (np.nan, np.nan).
+    """
+    H_thr = compute_H_threshold_sc(p_pa)
+    if np.isnan(H_thr):
+        return np.nan, np.nan
+
+    E_wall = omega * mu0 * H_thr * R / 2          # амплитуда E_φ на стенке
+    nu_c   = collision_freq(p_pa)
+    e_c    = 1.602176634e-19
+    m_e    = 9.1093837015e-31
+
+    # <E²>_time = E_wall²/2;  <r²/R²>_vol = 1/2  → <E_φ²>_{t,V} = E_wall²/4
+    # P = n_e · e²νc/(m_e(νc²+ω²)) · E_wall²/4 · πR²L
+    # => n_e = 4P · m_e(νc²+ω²) / (e² · νc · E_wall² · πR²L)
+    L   = cfg.L_TUBE
+    n_e = (4.0 * P_pp * m_e * (nu_c**2 + omega**2)
+           / (e_c**2 * nu_c * E_wall**2 * np.pi * R**2 * L))
+    return n_e, H_thr
+
+
 def threshold_Hwall(p_pa):
     """H_wall, при котором ν_i = D_a·λ₁²/R² (порог разряда)."""
     def balance(H):
@@ -264,7 +325,7 @@ def make_figure():
 
     r_bes, H_bes = bessel_H_profile(x_fit)
     ax1.plot(r_bes, H_bes, color="#d62728", lw=2.2, ls="-",
-             label=(rf"Bessel-фит ($\delta/R={1/x_fit:.2f}$,"
+             label=(rf"Bessel ($\delta/R={1/x_fit:.2f}$,"
                     + "\n" + rf"$n_e\approx{ne_impl:.1e}$ м$^{{-3}}$)"))
 
     # ── (б) Численный профиль при n_e, близком к фиту ─────────────────────
@@ -275,7 +336,7 @@ def make_figure():
                     + "\n" + rf"$\lambda_0={lam0_num:.2f}$, $\delta/R={R/x_fit:.2f}$)"))
 
     # ── (в) Справочный плоский профиль при экспериментальной плотности ────
-    ne_exp_meas = 3.21e16   # эксп. n_e из рис. 2.38, p≈119 Па
+    ne_exp_meas = 3.21e16   # справочная низкая плотность: δ >> R, профиль почти плоский
     nu_c_val = collision_freq(p_pa)
     sa_exp = (ne_exp_meas * 1.602176634e-19**2 * nu_c_val /
               (9.1093837015e-31 * (nu_c_val**2 + omega**2)))
@@ -370,74 +431,8 @@ def make_figure():
     ax3.set_xlim(0.6, 1.6)
     ax3.legend(fontsize=8)
 
-    # ── График 4: n_e vs p — немонотонность (Рис. 2.38) ──────────────────
-    ax4 = fig.add_subplot(gs[1, 0])
-
-    # ── Двухбалансная модель — показываем оба конкурирующих механизма ────
-    #
-    # n_e ∝ νc(p) / E_abs²(p)  где E_abs(p) — из баланса частиц
-    #
-    # Конкурирующие механизмы:
-    #   νc ∝ p                   → n_e растёт с p (меньше потери через диффузию)
-    #   E_abs(p) ∝ p·x(p)       → растёт с p → n_e убывает (ионизация неэффективна)
-    # Пик там, где d/dp[νc/E_abs²] = 0.
-    # Модель даёт пик при p≈6 Па (экcп. пик при ~160 Па).
-    #
-    p_wide = np.logspace(np.log10(1.5), np.log10(310), 200)
-    E_abs_arr = np.array([find_E_eff_particle_balance(pp) for pp in p_wide])
-    valid_w   = np.isfinite(E_abs_arr) & (E_abs_arr > 0)
-    nu_c_arr  = np.array([collision_freq(pp) for pp in p_wide])
-
-    # Два компонента (нормированы к значению при p=100 Па)
-    p_ref_idx = np.argmin(np.abs(p_wide - 100))
-    fac_nc  = nu_c_arr / nu_c_arr[p_ref_idx]               # νc/νc_ref
-    fac_Eab = E_abs_arr**2 / E_abs_arr[p_ref_idx]**2       # E_abs²/E_abs_ref²
-    ne_2b_w = fac_nc / fac_Eab                             # n_e ∝ νc/E_abs²
-
-    # Нормируем обе (эксперимент и модель) к своему максимуму
-    ne_exp_norm   = exp_238_ne / np.max(exp_238_ne)
-    ne_2b_norm    = ne_2b_w / np.nanmax(ne_2b_w[valid_w])
-
-    # Экспериментальные точки (нормированные)
-    ax4.plot(exp_238_p, ne_exp_norm, "rs", ms=8, zorder=5,
-             label="Эксп. (Рис. 2.38, норм.)")
-
-    # Кривая модели
-    ax4.plot(p_wide[valid_w], ne_2b_norm[valid_w], "#1f77b4", lw=2.0,
-             label=r"Модель: $n_e \propto \nu_c\,/\,E_{abs}^2$"
-                   + "\n(два баланса, норм.)")
-
-    # Два компонента раздельно (не нормированные на свой макс, а просто отмасштабированные)
-    ax4.plot(p_wide[valid_w], fac_nc[valid_w] / np.max(fac_nc[valid_w]),
-             "#2ca02c", lw=1.2, ls="--", alpha=0.75,
-             label=r"Фактор $\nu_c \propto p$ (↑)")
-    ax4.plot(p_wide[valid_w],
-             1.0 / (fac_Eab[valid_w] / np.nanmax(fac_Eab[valid_w])),
-             "#d62728", lw=1.2, ls=":", alpha=0.75,
-             label=r"Фактор $1/E_{abs}^2$ (↓ при росте $p$)")
-
-    # Пик модели и пик эксперимента
-    p_peak_mod = p_wide[valid_w][np.argmax(ne_2b_norm[valid_w])]
-    p_peak_exp = exp_238_p[np.argmax(exp_238_ne)]
-    ax4.axvline(p_peak_mod, color="#1f77b4", ls="--", lw=1.2, alpha=0.8)
-    ax4.axvline(p_peak_exp, color="r",       ls="--", lw=1.2, alpha=0.8)
-    ax4.text(p_peak_mod + 2, 0.65,
-             rf"$p_{{opt}}^{{mod}}$≈{p_peak_mod:.0f} Па",
-             color="#1f77b4", fontsize=7.5, va="center")
-    ax4.text(p_peak_exp + 2, 0.50,
-             rf"$p_{{opt}}^{{exp}}$≈{p_peak_exp:.0f} Па",
-             color="r", fontsize=7.5, va="center")
-
-    ax4.set_xlabel("$p$, Па")
-    ax4.set_ylabel(r"$n_e\,/\,n_{e,\max}$ (нормировано)")
-    ax4.set_title("$n_e$ vs давление\n(Рис. 2.38, $P_p=1{,}5$ кВт)")
-    ax4.set_xscale("log")
-    ax4.set_xlim(1.5, 320)
-    ax4.set_ylim(-0.05, 1.15)
-    ax4.legend(fontsize=7.0, loc="lower right")
-
-    # ── График 5: Порог разряда ν_i/потери vs H_wall ─────────────────────
-    ax5 = fig.add_subplot(gs[1, 1])
+    # ── График 4: Порог разряда ν_i/потери vs H_wall ─────────────────────
+    ax5 = fig.add_subplot(gs[1, 0])
     H_scan = np.linspace(2e4, 1.1e5, 300)
     colors_p  = ["#2ca02c", "#1f77b4", "#d62728"]
     press_arr = [66.5, 133.0, 266.0]
@@ -455,7 +450,7 @@ def make_figure():
             pass
 
     ax5.axhline(1.0, color="k", ls="-", lw=1.2, label="Порог ($\\nu_i = \\Gamma$)")
-    ax5.set_xlabel("$H_\mathrm{wall}$, кА/м")
+    ax5.set_xlabel(r"$H_\mathrm{wall}$, кА/м")
     ax5.set_ylabel(r"$\nu_i\,/\,(D_a\lambda_1^2/R^2)$")
     ax5.set_title("Порог самоподдержания разряда\n"
                   r"$\nu_i = D_a\lambda_1^2/R^2$")
@@ -473,8 +468,8 @@ def make_figure():
         except Exception:
             pass
 
-    # ── График 6: Скин-глубина δ vs n_e ──────────────────────────────────
-    ax6 = fig.add_subplot(gs[1, 2])
+    # ── График 5: Скин-глубина δ vs n_e ──────────────────────────────────
+    ax6 = fig.add_subplot(gs[1, 1:])
     ne_arr = np.logspace(15, 20, 200)
 
     colors_pp = ["#2ca02c", "#1f77b4", "#d62728"]
@@ -484,12 +479,6 @@ def make_figure():
 
     # Линия δ = R
     ax6.axhline(R * 100, color="k", ls="--", lw=1.2, label=f"$\\delta = R={R*100:.1f}$ см")
-
-    # Экспериментальные точки: n_e из Рис. 2.38 (p=133 Па)
-    ne_exp_pts = np.array([0.22, 0.81, 1.75, 3.71, 7.83, 22.4]) * 1e16
-    delta_exp  = np.array([skin_depth(ne, 133.0) for ne in ne_exp_pts])
-    ax6.loglog(ne_exp_pts, delta_exp * 100, "ks", ms=6,
-               label="Эксп. точки\n(Рис. 2.38, $p=133$ Па)")
 
     ax6.set_xlabel("$n_e$, м⁻³")
     ax6.set_ylabel("$\\delta$, см")
@@ -525,3 +514,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

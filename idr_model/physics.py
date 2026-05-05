@@ -15,16 +15,36 @@ from config import (
     D1, D2, B1, B2, B3,
     NU_C_PER_TORR,
     M_ARGON, K_BOLTZMANN,
-    T_ELECTRON_EV,
+    T_ELECTRON_EV, T_NEUTRAL,
+    USE_BOLSIG, BOLSIG_TABLE_PATH,
 )
+from bolsig import load_bolsig_table
 
 # Перевод единиц давления
 PA_TO_TORR = 1.0 / 133.322   # 1 Па = 7.5006e-3 мм рт. ст.
+TD = 1e-21                  # 1 Townsend = 1e-21 V*m^2
+
+
+def _bolsig_table():
+    if not USE_BOLSIG:
+        return None
+    try:
+        return load_bolsig_table(BOLSIG_TABLE_PATH)
+    except (OSError, ValueError):
+        return None
 
 
 def pressure_torr(p_pa: float | np.ndarray) -> float | np.ndarray:
     """Перевод давления из Па в мм рт. ст. (торр)."""
     return p_pa * PA_TO_TORR
+
+
+def reduced_field_td(E_eff: float | np.ndarray,
+                     p_pa: float | np.ndarray,
+                     T_a: float = T_NEUTRAL) -> float | np.ndarray:
+    """Reduced electric field E/N in Townsend."""
+    n_gas = p_pa / (K_BOLTZMANN * T_a)
+    return E_eff / (n_gas + 1e-300) / TD
 
 
 def collision_freq(p_pa: float | np.ndarray) -> float | np.ndarray:
@@ -91,6 +111,13 @@ def ambipolar_diffusion(E_eff: float | np.ndarray,
     -------
     Da в м²/с (всегда > 0)
     """
+    table = _bolsig_table()
+    if table is not None:
+        n_gas = neutral_density(p_pa, T_NEUTRAL)
+        e_over_n = reduced_field_td(E_eff, p_pa, T_NEUTRAL)
+        diffusion_n = table.interp(table.diffusion_n, e_over_n)
+        return diffusion_n / (n_gas + 1e-300)
+
     p_torr = pressure_torr(p_pa)
     # Нормировка поля: В/(м·торр)
     Ep = E_eff / (p_torr + 1e-30)   # защита от p→0
@@ -118,6 +145,16 @@ def ionization_freq(E_eff: float | np.ndarray,
     -------
     νi в с⁻¹ (≥ 0)
     """
+    table = _bolsig_table()
+    if table is not None:
+        n_gas = neutral_density(p_pa, T_NEUTRAL)
+        e_over_n = reduced_field_td(E_eff, p_pa, T_NEUTRAL)
+        nu_i = table.interp(table.ionization_freq_over_n, e_over_n) * n_gas
+        zero_mask = (np.asarray(E_eff) <= 0.0)
+        if isinstance(nu_i, np.ndarray):
+            return np.where(zero_mask, 0.0, nu_i)
+        return 0.0 if bool(zero_mask) else float(nu_i)
+
     p_torr = pressure_torr(p_pa)
     Ep = E_eff / (p_torr + 1e-30)   # В/(м·торр)
 

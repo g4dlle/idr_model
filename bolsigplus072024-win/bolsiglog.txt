@@ -1,0 +1,95 @@
+BOLSIG+ script file: idr_argon_table.in
+READCOLLISIONS
+Ar
+SigloDataBase-LXCat-04Jun2013.txt
+How to reference in publications:
+1) Yamabe, Buckman, and Phelps, Phys. Rev. 27, 1345 (1983). Revised Oct 1997
+2) PHELPS database,http://www.lxcat.laplace.univ-tlse.fr, retrieved June 4, 2013.
+C1    Ar    Effective (momentum)                                
+C2    Ar    Excitation    11.50 eV                              
+C3    Ar    Ionization    15.80 eV                              
+RUNSERIES
+R1    0.1000 Td    0.788 eV                                     
+R2    0.112 Td    0.833 eV                                      
+R3    0.126 Td    0.881 eV                                      
+R4    0.141 Td    0.932 eV                                      
+R5    0.158 Td    0.987 eV                                      
+R6    0.178 Td    1.05 eV                                       
+R7    0.200 Td    1.11 eV                                       
+R8    0.224 Td    1.17 eV                                       
+R9    0.251 Td    1.24 eV                                       
+R10   0.282 Td    1.32 eV                                       
+R11   0.316 Td    1.40 eV                                       
+R12   0.355 Td    1.48 eV                                       
+R13   0.398 Td    1.56 eV                                       
+R14   0.447 Td    1.66 eV                                       
+R15   0.501 Td    1.75 eV                                       
+R16   0.562 Td    1.85 eV                                       
+R17   0.631 Td    1.96 eV                                       
+R18   0.708 Td    2.08 eV                                       
+R19   0.794 Td    2.20 eV                                       
+R20   0.891 Td    2.33 eV                                       
+R21   1.00 Td    2.46 eV                                        
+R22   1.12 Td    2.61 eV                                        
+R23   1.26 Td    2.76 eV                                        
+R24   1.41 Td    2.93 eV                                        
+R25   1.58 Td    3.10 eV                                        
+R26   1.78 Td    3.28 eV                                        
+R27   2.00 Td    3.47 eV                                        
+R28   2.24 Td    3.66 eV                                        
+R29   2.51 Td    3.87 eV                                        
+R30   2.82 Td    4.08 eV                                        
+R31   3.16 Td    4.30 eV                                        
+R32   3.55 Td    4.52 eV                                        
+R33   3.98 Td    4.72 eV                                        
+R34   4.47 Td    4.89 eV                                        
+R35   5.01 Td    5.02 eV                                        
+R36   5.62 Td    5.12 eV                                        
+R37   6.31 Td    5.20 eV                                        
+R38   7.08 Td    5.25 eV                                        
+R39   7.94 Td    5.30 eV                                        
+R40   8.91 Td    5.34 eV                                        
+R41   10.0 Td    5.37 eV                                        
+R42   11.2 Td    5.41 eV                                        
+R43   12.6 Td    5.45 eV                                        
+R44   14.1 Td    5.49 eV                                        
+R45   15.8 Td    5.54 eV                                        
+R46   17.8 Td    5.59 eV                                        
+R47   20.0 Td    5.65 eV                                        
+R48   22.4 Td    5.70 eV                                        
+R49   25.1 Td    5.77 eV                                        
+R50   28.2 Td    5.84 eV                                        
+R51   31.6 Td    5.91 eV                                        
+R52   35.5 Td    5.99 eV                                        
+R53   39.8 Td    6.08 eV                                        
+R54   44.7 Td    6.17 eV                                        
+R55   50.1 Td    6.26 eV                                        
+R56   56.2 Td    6.36 eV                                        
+R57   63.1 Td    6.47 eV                                        
+R58   70.8 Td    6.58 eV                                        
+R59   79.4 Td    6.69 eV                                        
+R60   89.1 Td    6.81 eV                                        
+R61   100.0 Td    6.94 eV                                       
+R62   112. Td    7.08 eV                                        
+R63   126. Td    7.22 eV                                        
+R64   141. Td    7.37 eV                                        
+R65   158. Td    7.54 eV                                        
+R66   178. Td    7.71 eV                                        
+R67   200. Td    7.90 eV                                        
+R68   224. Td    8.11 eV                                        
+R69   251. Td    8.33 eV                                        
+R70   282. Td    8.58 eV                                        
+R71   316. Td    8.86 eV                                        
+R72   355. Td    9.16 eV                                        
+R73   398. Td    9.51 eV                                        
+R74   447. Td    9.91 eV                                        
+R75   501. Td    10.4 eV                                        
+R76   562. Td    10.9 eV                                        
+R77   631. Td    11.5 eV                                        
+R78   708. Td    12.2 eV                                        
+R79   794. Td    13.0 eV                                        
+R80   891. Td    14.0 eV                                        
+R81   1000. Td    15.1 eV                                       
+SAVERESULTS
+idr_argon_table.dat
+FINISHED

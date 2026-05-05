@@ -1,0 +1,10 @@
+metric,value
+n_e0_1d_m^-3,100000000000000.0
+n_e0_2d_m^-3,100000000000000.0
+n_e0_rel_mismatch,0.0
+H_rel_max_midplane,5.238689482212067e-15
+H_rel_l2_midplane,2.6232462998842765e-15
+lambda0_1d,0.9523739036310342
+lambda0_2d,0.9146588386751143
+converged_1d,True
+converged_2d,False
