@@ -49,7 +49,7 @@ def compute_alpha_2d(sigma_a, sigma_p):
     return sigma_a / safe
 
 
-def compute_E_faraday_2d(u_2d, r, hz, Nr, Nz):
+def compute_E_faraday_2d(u_2d, r, Nr, Nz):
     """
     Compute |E_φ|² from Faraday's law for each z-slice independently.
 
@@ -95,6 +95,7 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
                  p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
                  max_iter=MAX_ITER, tol=TOL, relax=RELAX,
                  r_inc=0.0, bc_z_sigma="dirichlet",
+                 gamma_wall=0.0,
                  G_sccm=G_SCCM, T_a=T_NEUTRAL,
                  verbose=False):
     """
@@ -113,7 +114,8 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
     tol        : convergence criterion
     relax      : under-relaxation factor
     r_inc      : inner inclusion radius [m] (0 = no inclusion)
-    bc_z_sigma : "dirichlet" or "neumann" for sigma at z-boundaries
+    bc_z_sigma : "dirichlet", "neumann" или "robin" for sigma at z-boundaries
+    gamma_wall : wall recombination velocity [m/s] (used when bc_z_sigma="robin")
     G_sccm     : volumetric flow rate [sccm] for Poiseuille velocity profile
     T_a        : neutral gas temperature [K]
     verbose    : print residuals
@@ -183,7 +185,7 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
         u_new = np.maximum(u_flat.reshape(Nr + 1, Nz1), 0.0)
 
         # Step b: |E_φ|² from Faraday per z-slice
-        v_new = compute_E_faraday_2d(u_new, r, hz, Nr, Nz)
+        v_new = compute_E_faraday_2d(u_new, r, Nr, Nz)
 
         # Step c: effective field & transport coefficients
         E_abs = np.sqrt(v_new)
@@ -196,6 +198,7 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
             r, z, hr, hz, Da, nu_i,
             sigma_ref=sigma_a, dt=None,
             bc_z_sigma=bc_z_sigma,
+            gamma_wall=gamma_wall,
         )
         sigma_raw_flat = spsolve(A_s, rhs_s)
         sigma_raw = np.maximum(sigma_raw_flat.reshape(Nr + 1, Nz1), 0.0)

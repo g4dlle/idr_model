@@ -15,11 +15,10 @@ from solver import thomas_solve, compute_alpha
 from physics import (
     conductivity, effective_field,
     ambipolar_diffusion, ionization_freq,
-    bohm_velocity,
 )
 from boundary import apply_wall_sigma
 from config import (
-    N_GRID, R_TUBE, P_PA, H_WALL, N_E0,
+    N_GRID, R_TUBE, P_PA, H_WALL,
     MAX_ITER, TOL, RELAX,
     OMEGA,
 )

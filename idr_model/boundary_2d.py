@@ -46,12 +46,14 @@ def apply_bc_sigma_2d(sigma: np.ndarray,
 
     r = 0 (i = 0) : dσ/dr = 0   (обрабатывается в equations_2d)
     r = R (i = -1): σ = 0       (Дирихле — рекомбинация)
-    z = 0, L      : σ = 0 (Дирихле) или dσ/dz = 0 (Неймана)
+    z = 0, L      : σ = 0 (dirichlet), dσ/dz = 0 (neumann),
+                    или Da·∂σ/∂n + γ·σ = 0 (robin — неявно через матрицу)
     """
     sigma[-1, :] = 0.0
     if bc_z == "dirichlet":
         sigma[:, 0] = 0.0
         sigma[:, -1] = 0.0
-    else:
+    elif bc_z == "neumann":
         sigma[:, 0] = sigma[:, 1]
         sigma[:, -1] = sigma[:, -2]
+    # robin: граничные значения определяются из матрицы, явного обнуления нет

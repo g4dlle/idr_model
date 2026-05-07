@@ -21,7 +21,7 @@ from equations import (
     make_grid, build_H_equation, build_sigma_equation,
 )
 from physics import (
-    conductivity, sigma_from_conductivity,
+    conductivity,
     effective_field, ambipolar_diffusion, ionization_freq,
 )
 from boundary import apply_wall_sigma
@@ -29,7 +29,6 @@ from config import (
     N_GRID, R_TUBE, H_WALL, P_PA, N_E0,
     MAX_ITER, TOL, RELAX,
     E_CHARGE, M_ELECTRON, OMEGA,
-    NU_C_PER_TORR, DT,
 )
 
 MU_0 = 4.0 * np.pi * 1e-7   # H/m, vacuum permeability

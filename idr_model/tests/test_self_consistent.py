@@ -122,13 +122,13 @@ def test_lambda0_monotone_vs_ne0():
         )
         lambdas.append(res["lambda0"])
 
-    # Проверяем монотонность (строго возрастание или убывание)
+    # Физика: рост n_e0 → усиление скин-эффекта → E уменьшается внутри
+    # → νi падает → λ₀ убывает. Проверяем строгое убывание.
     diffs = [lambdas[i+1] - lambdas[i] for i in range(len(lambdas)-1)]
-    all_increasing = all(d > 0 for d in diffs)
     all_decreasing = all(d < 0 for d in diffs)
 
-    assert all_increasing or all_decreasing, (
-        f"λ₀(n_e0) не монотонна: "
+    assert all_decreasing, (
+        f"λ₀(n_e0) не убывает с ростом n_e0: "
         f"ne={ne_values}, λ₀={[f'{l:.4f}' for l in lambdas]}"
     )
 

@@ -27,33 +27,27 @@ NE_TEST = 1e16   # м⁻³
 def test_conductivity_real_limit():
     """
     При ω→0 проводимость должна стать вещественной:
-    σ_a → n_e·e²/(m_e·νc),  σ_p → 0.
+    σ_a → n_e·e²/(m_e·νc),  σ_p → 0,  σ_p/σ_a = ω/νc → 0.
+
+    Проверяем аналитически: формулы дают σ_p/σ_a = ω/νc точно.
+    При малом ω (p=133 Па → νc ≈ 5.6e9 с⁻¹, ω = 1.1e7 рад/с):
+      σ_p/σ_a = ω/νc ≈ 0.002 — проводимость почти вещественная.
     """
-    import config as cfg
-    omega_orig = cfg.OMEGA
-    import physics
-
-    # Подменяем OMEGA через монкипатч
-    physics.OMEGA = 1e-10   # почти ноль
-    import importlib
-    importlib.reload(physics)   # перезагрузим с новым OMEGA
-    from physics import conductivity as cond2, collision_freq as nu_c2
-
-    physics.OMEGA = 1e-10
-    # Пересчитываем вручную
     nu_c = NU_C_PER_TORR * (P_TEST / 133.322)
-    sigma_a_analytic = NE_TEST * E_CHARGE**2 / (M_ELECTRON * nu_c)
-
     sigma_a, sigma_p, _ = conductivity(NE_TEST, P_TEST)
-    # Допуск: σ_p/σ_a должно быть малым при ω≪νc
-    ratio = abs(sigma_p) / abs(sigma_a)
-    assert ratio < (OMEGA / nu_c) * 2, (
-        f"σ_p/σ_a = {ratio:.4f} > ω/νc = {OMEGA/nu_c:.4f}"
+
+    # Аналитически: σ_a/σ_p = νc/ω  →  σ_p/σ_a = ω/νc  (точное соотношение)
+    ratio_computed = abs(sigma_p) / abs(sigma_a)
+    ratio_analytic = OMEGA / nu_c
+
+    assert abs(ratio_computed - ratio_analytic) / ratio_analytic < 1e-10, (
+        f"σ_p/σ_a = {ratio_computed:.8f}, ожидалось ω/νc = {ratio_analytic:.8f}"
     )
 
-    # Восстанавливаем
-    physics.OMEGA = omega_orig
-    importlib.reload(physics)
+    # При физических параметрах аргона при 1 торр: проводимость в основном вещественная
+    assert ratio_computed < 0.01, (
+        f"σ_p/σ_a = {ratio_computed:.4f} — ожидался коллизионный режим (< 0.01)"
+    )
 
 
 # ─── 1.2 При νc≪ω: σ_a ≪ σ_p ────────────────────────────────────────────────

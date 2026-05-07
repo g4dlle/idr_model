@@ -222,7 +222,8 @@ def build_H_equation_2d(r, z, hr, hz,
 def build_sigma_equation_2d(r, z, hr, hz,
                             Da_2d, nu_i_2d,
                             sigma_ref=None, dt=None,
-                            bc_z_sigma="dirichlet"):
+                            bc_z_sigma="dirichlet",
+                            gamma_wall=0.0):
     """
     Собирает разреженную СЛАУ для уравнения на 2D-сетке.
 
@@ -233,7 +234,13 @@ def build_sigma_equation_2d(r, z, hr, hz,
     ГУ:
       r = 0   : dσ/dr = 0 (Лопиталь)
       r = R   : σ = 0
-      z = 0, L: σ = 0 (Дирихле) или dσ/dz = 0 (Неймана)
+      z = 0, L: σ = 0 (dirichlet), dσ/dz = 0 (neumann),
+                Da·∂σ/∂n + γ_w·σ = 0 (robin)
+
+    Условие Робена реализуется через фиктивный узел:
+      z=0: σ_{-1} = σ_1 − 2hz·(γ_w/Da)·σ_0
+      z=L: σ_{N+1} = σ_{N-1} − 2hz·(γ_w/Da)·σ_N
+    что даёт дополнительный диагональный член +2·Dz·γ_w/(hz·Da) в матрице -L.
 
     Parameters
     ----------
@@ -243,7 +250,8 @@ def build_sigma_equation_2d(r, z, hr, hz,
     nu_i_2d        : частота ионизации, shape (Nr+1, Nz+1)
     sigma_ref      : профиль σ с предыдущего шага; None → однородная система
     dt             : шаг псевдо-времени; None → без временного члена
-    bc_z_sigma     : "dirichlet" или "neumann" — ГУ для σ на торцах
+    bc_z_sigma     : "dirichlet", "neumann" или "robin"
+    gamma_wall     : скорость рекомбинации на торцах [м/с] (только для robin)
 
     Returns
     -------
@@ -293,26 +301,31 @@ def build_sigma_equation_2d(r, z, hr, hz,
                 # z-часть
                 coef_z_p = 0.0
                 coef_z_m = 0.0
+                robin_z = 0.0
                 if j > 0 and j < Nz:
                     Dz_p = 0.5 * (Da_2d[i, j] + Da_2d[i, j + 1])
                     Dz_m = 0.5 * (Da_2d[i, j] + Da_2d[i, j - 1])
                     coef_z_p = Dz_p / hz**2
                     coef_z_m = Dz_m / hz**2
                 elif j == 0:
-                    if bc_z_sigma == "neumann":
+                    if bc_z_sigma in ("neumann", "robin"):
                         Dz_p = 0.5 * (Da_2d[i, 0] + Da_2d[i, 1])
                         coef_z_p = 2.0 * Dz_p / hz**2
-                    else:
-                        # j=0 — Дирихле, обработано выше
-                        pass
+                        if bc_z_sigma == "robin":
+                            Da_bc = max(Da_2d[i, 0], 1e-300)
+                            robin_z = 2.0 * Dz_p * gamma_wall / (hz * Da_bc)
+                    # else: dirichlet, обработано выше
                 else:  # j == Nz
-                    if bc_z_sigma == "neumann":
+                    if bc_z_sigma in ("neumann", "robin"):
                         Dz_m = 0.5 * (Da_2d[i, Nz] + Da_2d[i, Nz - 1])
                         coef_z_m = 2.0 * Dz_m / hz**2
+                        if bc_z_sigma == "robin":
+                            Da_bc = max(Da_2d[i, Nz], 1e-300)
+                            robin_z = 2.0 * Dz_m * gamma_wall / (hz * Da_bc)
                 diag_z = -(coef_z_p + coef_z_m)
 
                 if power_iter:
-                    add(k, k, coef_r + (-diag_z) + inv_dt)
+                    add(k, k, coef_r + (-diag_z) + inv_dt + robin_z)
                     add(k, idx(1, j, Nz1), -coef_r)
                     if j > 0:
                         add(k, idx(i, j - 1, Nz1), -coef_z_m)
@@ -323,7 +336,7 @@ def build_sigma_equation_2d(r, z, hr, hz,
                     else:
                         rhs[k] = nu_i_2d[i, j] * sigma_ref[i, j]
                 else:
-                    add(k, k, coef_r + (-diag_z) - nu_i_2d[i, j])
+                    add(k, k, coef_r + (-diag_z) - nu_i_2d[i, j] + robin_z)
                     add(k, idx(1, j, Nz1), -coef_r)
                     if j > 0:
                         add(k, idx(i, j - 1, Nz1), -coef_z_m)
@@ -352,23 +365,30 @@ def build_sigma_equation_2d(r, z, hr, hz,
             # z-часть
             coef_z_p = 0.0
             coef_z_m = 0.0
+            robin_z = 0.0
             if j > 0 and j < Nz:
                 Dz_p = 0.5 * (Da_2d[i, j] + Da_2d[i, j + 1])
                 Dz_m = 0.5 * (Da_2d[i, j] + Da_2d[i, j - 1])
                 coef_z_p = Dz_p / hz**2
                 coef_z_m = Dz_m / hz**2
             elif j == 0:
-                if bc_z_sigma == "neumann":
+                if bc_z_sigma in ("neumann", "robin"):
                     Dz_p = 0.5 * (Da_2d[i, 0] + Da_2d[i, 1])
                     coef_z_p = 2.0 * Dz_p / hz**2
+                    if bc_z_sigma == "robin":
+                        Da_bc = max(Da_2d[i, 0], 1e-300)
+                        robin_z = 2.0 * Dz_p * gamma_wall / (hz * Da_bc)
             else:  # j == Nz
-                if bc_z_sigma == "neumann":
+                if bc_z_sigma in ("neumann", "robin"):
                     Dz_m = 0.5 * (Da_2d[i, Nz] + Da_2d[i, Nz - 1])
                     coef_z_m = 2.0 * Dz_m / hz**2
+                    if bc_z_sigma == "robin":
+                        Da_bc = max(Da_2d[i, Nz], 1e-300)
+                        robin_z = 2.0 * Dz_m * gamma_wall / (hz * Da_bc)
             diag_z = -(coef_z_p + coef_z_m)
 
             if power_iter:
-                add(k, k, (cr_p + cr_m) + (-diag_z) + inv_dt)
+                add(k, k, (cr_p + cr_m) + (-diag_z) + inv_dt + robin_z)
                 add(k, idx(i + 1, j, Nz1), -cr_p)
                 add(k, idx(i - 1, j, Nz1), -cr_m)
                 if j < Nz:
@@ -380,7 +400,7 @@ def build_sigma_equation_2d(r, z, hr, hz,
                 else:
                     rhs[k] = nu_i_2d[i, j] * sigma_ref[i, j]
             else:
-                add(k, k, (cr_p + cr_m) + (-diag_z) - nu_i_2d[i, j])
+                add(k, k, (cr_p + cr_m) + (-diag_z) - nu_i_2d[i, j] + robin_z)
                 add(k, idx(i + 1, j, Nz1), -cr_p)
                 add(k, idx(i - 1, j, Nz1), -cr_m)
                 if j < Nz:
