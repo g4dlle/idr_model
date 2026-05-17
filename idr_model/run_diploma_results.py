@@ -229,6 +229,7 @@ def table_inclusion(save_dir, use_2d=False):
                 p_pa=P_PA, H_wall=H_WALL, n_e0=N_E0,
                 r_inc=r_inc, bc_z_sigma=BC_Z_SIGMA,
                 max_iter=500, tol=1e-6, relax=0.5,
+                G_sccm=0.0,  # отключаем поток: сравниваем только r_inc
             )
             sigma_max = float(np.max(sol["sigma_a"]))
             ne_max    = float(np.max(sol["n_e"]))
@@ -272,7 +273,8 @@ def table_inclusion(save_dir, use_2d=False):
 
     title = f"Table 2 - effect of conductive inclusion ({model_tag})"
     _print_table(headers, rows, title)
-    csv_path = os.path.join(save_dir, "table2_inclusion.csv") if save_dir else None
+    csv_name = f"table2_inclusion_{model_tag.lower()}.csv"
+    csv_path = os.path.join(save_dir, csv_name) if save_dir else None
     _save_csv(csv_path, headers, rows)
     return rows
 
@@ -289,7 +291,12 @@ def table_poiseuille(save_dir):
     rho = gas_mass_density(p_pa, T_a)
     r_half = R / 2.0
 
-    headers = ["G, sccm", "G, kg/s", "v0, m/s", "v(R/2), m/s", "Re"]
+    # Физический амбиполярный Da = D1/p [м²/с], D1 = 6.4e-4 м²/(с·Торр)
+    from config import D1
+    p_torr = p_pa / 133.322
+    Da_phys = D1 / p_torr   # [м²/с], классический амбиполярный Da
+
+    headers = ["G, sccm", "G, kg/s", "v0, m/s", "v(R/2), m/s", "Re", "Pe_phys"]
     rows = []
 
     for G_sccm in G_values_sccm:
@@ -301,6 +308,8 @@ def table_poiseuille(save_dir):
         mu_ar  = 2.27e-5
         v_mean = v0 / 2.0
         Re     = rho * v_mean * (2 * R) / mu_ar
+        # Число Пекле (физическое): Pe = v0·R / Da_phys
+        Pe_phys = v0 * R / Da_phys
 
         rows.append([
             f"{G_sccm:.0f}",
@@ -308,6 +317,7 @@ def table_poiseuille(save_dir):
             f"{v0:.4f}",
             f"{v_half:.4f}",
             f"{Re:.1f}",
+            f"{Pe_phys:.0f}",
         ])
 
     _print_table(headers, rows,
@@ -423,19 +433,11 @@ def plot_velocity_vs_density(save_path):
     ax.set_xlim(0, R_TUBE * 1e3)
     ax.set_ylim(0, 1.05)
 
-    # Стрелки-аннотации
-    ax.annotate(
-        "плазма\n(скин-слой)",
-        xy=(R_TUBE * 1e3 * 0.85, 0.45),
-        xytext=(R_TUBE * 1e3 * 0.60, 0.65),
-        arrowprops=dict(arrowstyle="->", color="black"),
-        fontsize=9, color="black",
-    )
     fig.tight_layout()
     _savefig(fig, save_path)
 
 
-# ── Рис. П3: история бисекции (log n_e0 vs λ₀) ───────────────────────────────
+# ── Рис. П4: λ₀(n_e0) для разных p и R ──────────────────────────────────────
 
 def plot_lambda_scan(save_path):
     """
@@ -524,16 +526,6 @@ def plot_bisection_history(save_path):
     ax_err.set_title("Невязка бисекции (лог. масштаб)")
     ax_err.grid(True, alpha=0.3, which="both")
 
-    # Аннотация финального значения
-    ax_lam.annotate(
-        f"n_e0* = {res['n_e0']:.2e} м⁻³\nλ₀ = {res['lambda0']:.4f}",
-        xy=(len(history), lam_vals[-1]),
-        xytext=(max(1, len(history) - 4), lam_vals[-1] + 0.15),
-        arrowprops=dict(arrowstyle="->"),
-        fontsize=9,
-        bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow"),
-    )
-
     fig.tight_layout()
     _savefig(fig, save_path)
 
@@ -579,9 +571,9 @@ def main(save_dir=None):
     plot_lambda_scan(path("figP4_lambda_scan.png"))
 
     print("\n" + "="*60)
-    print("  Gotovo.")
+    print("  Готово.")
     if save_dir:
-        print(f"  Fajly sohraneny v: {os.path.abspath(save_dir)}")
+        print(f"  Файлы сохранены в: {os.path.abspath(save_dir)}")
     print("="*60)
 
 

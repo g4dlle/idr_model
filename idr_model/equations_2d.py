@@ -223,7 +223,8 @@ def build_sigma_equation_2d(r, z, hr, hz,
                             Da_2d, nu_i_2d,
                             sigma_ref=None, dt=None,
                             bc_z_sigma="dirichlet",
-                            gamma_wall=0.0):
+                            gamma_wall=0.0,
+                            v_2d=None):
     """
     Собирает разреженную СЛАУ для уравнения на 2D-сетке.
 
@@ -252,6 +253,12 @@ def build_sigma_equation_2d(r, z, hr, hz,
     dt             : шаг псевдо-времени; None → без временного члена
     bc_z_sigma     : "dirichlet", "neumann" или "robin"
     gamma_wall     : скорость рекомбинации на торцах [м/с] (только для robin)
+    v_2d           : осевая скорость газа v(r,z) [м/с], shape (Nr+1, Nz+1);
+                     None → конвекция отсутствует.
+                     Конвективный член −v·∂σ/∂z дискретизируется апвиндом
+                     первого порядка. При v ≥ 0 (течение Пуазейля в +z):
+                       диаг: +v/hz,  узел (i,j−1): −v/hz.
+                     На входе (j=0, Дирихле) σ=0 — ГУ задаётся через bc_z_sigma.
 
     Returns
     -------
@@ -324,24 +331,34 @@ def build_sigma_equation_2d(r, z, hr, hz,
                             robin_z = 2.0 * Dz_m * gamma_wall / (hz * Da_bc)
                 diag_z = -(coef_z_p + coef_z_m)
 
+                # Апвинд-конвекция: v·∂σ/∂z
+                conv_d, conv_m, conv_p = 0.0, 0.0, 0.0
+                if v_2d is not None:
+                    vij = v_2d[i, j]
+                    vp = max(vij, 0.0)
+                    vn = min(vij, 0.0)
+                    conv_d = (vp - vn) / hz
+                    conv_m = -vp / hz if j > 0 else 0.0
+                    conv_p =  vn / hz if j < Nz else 0.0
+
                 if power_iter:
-                    add(k, k, coef_r + (-diag_z) + inv_dt + robin_z)
+                    add(k, k, coef_r + (-diag_z) + inv_dt + robin_z + conv_d)
                     add(k, idx(1, j, Nz1), -coef_r)
                     if j > 0:
-                        add(k, idx(i, j - 1, Nz1), -coef_z_m)
+                        add(k, idx(i, j - 1, Nz1), -coef_z_m + conv_m)
                     if j < Nz:
-                        add(k, idx(i, j + 1, Nz1), -coef_z_p)
+                        add(k, idx(i, j + 1, Nz1), -coef_z_p + conv_p)
                     if time_step:
                         rhs[k] = sigma_ref[i, j] * (inv_dt + nu_i_2d[i, j])
                     else:
                         rhs[k] = nu_i_2d[i, j] * sigma_ref[i, j]
                 else:
-                    add(k, k, coef_r + (-diag_z) - nu_i_2d[i, j] + robin_z)
+                    add(k, k, coef_r + (-diag_z) - nu_i_2d[i, j] + robin_z + conv_d)
                     add(k, idx(1, j, Nz1), -coef_r)
                     if j > 0:
-                        add(k, idx(i, j - 1, Nz1), -coef_z_m)
+                        add(k, idx(i, j - 1, Nz1), -coef_z_m + conv_m)
                     if j < Nz:
-                        add(k, idx(i, j + 1, Nz1), -coef_z_p)
+                        add(k, idx(i, j + 1, Nz1), -coef_z_p + conv_p)
                     rhs[k] = 0.0
                 continue
 
@@ -387,26 +404,36 @@ def build_sigma_equation_2d(r, z, hr, hz,
                         robin_z = 2.0 * Dz_m * gamma_wall / (hz * Da_bc)
             diag_z = -(coef_z_p + coef_z_m)
 
+            # Апвинд-конвекция: v·∂σ/∂z
+            conv_d, conv_m, conv_p = 0.0, 0.0, 0.0
+            if v_2d is not None:
+                vij = v_2d[i, j]
+                vp = max(vij, 0.0)
+                vn = min(vij, 0.0)
+                conv_d = (vp - vn) / hz
+                conv_m = -vp / hz if j > 0 else 0.0
+                conv_p =  vn / hz if j < Nz else 0.0
+
             if power_iter:
-                add(k, k, (cr_p + cr_m) + (-diag_z) + inv_dt + robin_z)
+                add(k, k, (cr_p + cr_m) + (-diag_z) + inv_dt + robin_z + conv_d)
                 add(k, idx(i + 1, j, Nz1), -cr_p)
                 add(k, idx(i - 1, j, Nz1), -cr_m)
                 if j < Nz:
-                    add(k, idx(i, j + 1, Nz1), -coef_z_p)
+                    add(k, idx(i, j + 1, Nz1), -coef_z_p + conv_p)
                 if j > 0:
-                    add(k, idx(i, j - 1, Nz1), -coef_z_m)
+                    add(k, idx(i, j - 1, Nz1), -coef_z_m + conv_m)
                 if time_step:
                     rhs[k] = sigma_ref[i, j] * (inv_dt + nu_i_2d[i, j])
                 else:
                     rhs[k] = nu_i_2d[i, j] * sigma_ref[i, j]
             else:
-                add(k, k, (cr_p + cr_m) + (-diag_z) - nu_i_2d[i, j] + robin_z)
+                add(k, k, (cr_p + cr_m) + (-diag_z) - nu_i_2d[i, j] + robin_z + conv_d)
                 add(k, idx(i + 1, j, Nz1), -cr_p)
                 add(k, idx(i - 1, j, Nz1), -cr_m)
                 if j < Nz:
-                    add(k, idx(i, j + 1, Nz1), -coef_z_p)
+                    add(k, idx(i, j + 1, Nz1), -coef_z_p + conv_p)
                 if j > 0:
-                    add(k, idx(i, j - 1, Nz1), -coef_z_m)
+                    add(k, idx(i, j - 1, Nz1), -coef_z_m + conv_m)
                 rhs[k] = 0.0
 
     A = sparse.csr_matrix((vals, (rows, cols)), shape=(M, M))

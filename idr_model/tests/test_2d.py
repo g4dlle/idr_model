@@ -181,3 +181,69 @@ class TestHelpers:
         sa, sp, _ = conductivity(n_e, p_pa)
         n_e_back = ne_from_sigma_2d(sa, p_pa)
         np.testing.assert_allclose(n_e_back, n_e, rtol=1e-10)
+
+
+# ─── Convective flow term ──────────────────────────────────────────────────────
+
+class TestConvection2D:
+
+    def test_sigma_matrix_shape_with_flow(self):
+        """build_sigma_equation_2d с v_2d возвращает матрицу той же формы."""
+        Nr, Nz = 5, 4
+        r, z, hr, hz = make_grid_2d(Nr, Nz, 0.012, 0.05)
+        M = (Nr + 1) * (Nz + 1)
+        Da = np.ones((Nr + 1, Nz + 1)) * 1e-3
+        nu_i = np.ones((Nr + 1, Nz + 1)) * 100.0
+        sigma_ref = np.ones((Nr + 1, Nz + 1))
+        v_2d = np.ones((Nr + 1, Nz + 1)) * 10.0
+        A, rhs = build_sigma_equation_2d(r, z, hr, hz, Da, nu_i,
+                                          sigma_ref=sigma_ref, v_2d=v_2d)
+        assert A.shape == (M, M)
+        assert rhs.shape == (M,)
+
+    def test_zero_flow_matches_no_flow(self):
+        """v_2d=0 даёт ту же матрицу, что и v_2d=None."""
+        Nr, Nz = 5, 4
+        r, z, hr, hz = make_grid_2d(Nr, Nz, 0.012, 0.05)
+        Da = np.ones((Nr + 1, Nz + 1)) * 1e-3
+        nu_i = np.ones((Nr + 1, Nz + 1)) * 100.0
+        sigma_ref = np.ones((Nr + 1, Nz + 1))
+
+        A_no, rhs_no = build_sigma_equation_2d(r, z, hr, hz, Da, nu_i,
+                                                sigma_ref=sigma_ref, v_2d=None)
+        v_zero = np.zeros((Nr + 1, Nz + 1))
+        A_z, rhs_z = build_sigma_equation_2d(r, z, hr, hz, Da, nu_i,
+                                              sigma_ref=sigma_ref, v_2d=v_zero)
+        diff = (A_no - A_z).toarray()
+        np.testing.assert_allclose(diff, 0.0, atol=1e-15)
+        np.testing.assert_allclose(rhs_no, rhs_z, atol=1e-15)
+
+    def test_flow_shifts_plasma_downstream(self):
+        """При большом потоке профиль σ(z) смещается к выходу (z=L).
+
+        Сравниваем z-центр тяжести плазмы с потоком и без.
+        """
+        kw = dict(Nr=15, Nz=20, R=0.012, L=0.05,
+                  p_pa=133.0, H_wall=150000.0,
+                  max_iter=100, tol=1e-4, relax=0.5,
+                  bc_z_sigma="dirichlet")
+
+        res_no = solve_idr_2d(**kw, G_sccm=0.0)
+        res_flow = solve_idr_2d(**kw, G_sccm=5000.0)
+
+        # Центр тяжести по z: z_c = ∫ σ·z dz / ∫ σ dz  (усреднено по r)
+        z = res_no["z"]
+        def z_centroid(sigma_2d):
+            sigma_z = sigma_2d.mean(axis=0)        # усреднение по r
+            norm = np.trapezoid(sigma_z, z)
+            if norm < 1e-300:
+                return z.mean()
+            return np.trapezoid(sigma_z * z, z) / norm
+
+        zc_no   = z_centroid(res_no["sigma_a"])
+        zc_flow = z_centroid(res_flow["sigma_a"])
+
+        assert zc_flow > zc_no, (
+            f"Поток должен смещать плазму к выходу: "
+            f"zc_no={zc_no*1e3:.2f} мм, zc_flow={zc_flow*1e3:.2f} мм"
+        )

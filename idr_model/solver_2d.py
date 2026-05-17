@@ -168,6 +168,15 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
     v = np.zeros((Nr + 1, Nz1))
     u[-1, :] = H_wall**2
 
+    # Профиль скорости Пуазейля: вычисляется один раз, не меняется в итерациях.
+    # G_sccm=0 → нет потока; в этом случае v_gas_2d=None (конвекция отключена).
+    if G_sccm > 0.0:
+        G_kg_s = sccm_to_kg_s(G_sccm)
+        v_gas_r = poiseuille_velocity(r, G_kg_s, R, p_pa, T_a)  # (Nr+1,)
+        v_gas_2d = np.outer(v_gas_r, np.ones(Nz + 1))           # (Nr+1, Nz+1)
+    else:
+        v_gas_2d = None
+
     residuals = []
     converged = False
 
@@ -199,6 +208,7 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
             sigma_ref=sigma_a, dt=None,
             bc_z_sigma=bc_z_sigma,
             gamma_wall=gamma_wall,
+            v_2d=v_gas_2d,
         )
         sigma_raw_flat = spsolve(A_s, rhs_s)
         sigma_raw = np.maximum(sigma_raw_flat.reshape(Nr + 1, Nz1), 0.0)
@@ -269,15 +279,15 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
     Da_final = ambipolar_diffusion(E_eff_fin, p_pa)
     nu_i_final = ionization_freq(E_eff_fin, p_pa)
 
-    # Профиль скорости Пуазейля (только по r; по z профиль постоянный).
-    # Для кольцевой геометрии (r_inc > 0) r[0] = r_inc; используем полный
-    # радиус трубки R для вычисления v0 (ось r=0 вне расчётной области).
-    G_kg_s = sccm_to_kg_s(G_sccm)
-    v_gas_r = poiseuille_velocity(r, G_kg_s, R, p_pa, T_a)  # (Nr+1,)
-    v_gas_2d = np.outer(v_gas_r, np.ones(Nz + 1))            # (Nr+1, Nz+1)
-    # Истинная скорость на оси (r=0) — независимо от r_inc
+    # Истинная скорость на оси (r=0) — независимо от r_inc.
     from physics import poiseuille_v0
-    v0_axis = poiseuille_v0(G_kg_s, R, p_pa, T_a)
+    G_kg_s = sccm_to_kg_s(G_sccm)
+    v0_axis = poiseuille_v0(G_kg_s, R, p_pa, T_a) if G_sccm > 0.0 else 0.0
+    if v_gas_2d is None:
+        v_gas_r = poiseuille_velocity(r, G_kg_s, R, p_pa, T_a)
+        v_gas_2d_out = np.outer(v_gas_r, np.ones(Nz + 1))
+    else:
+        v_gas_2d_out = v_gas_2d
 
     return {
         "r": r,
@@ -289,8 +299,8 @@ def solve_idr_2d(Nr=N_GRID, Nz=50, R=R_TUBE, L=0.05,
         "n_e": n_e_final,
         "Da": Da_final,
         "nu_i": nu_i_final,
-        "v_gas": v_gas_2d,   # профиль скорости газа v(r,z) [м/с]
-        "v0_gas": v0_axis,   # скорость на оси r=0 [м/с] (верно и при r_inc>0)
+        "v_gas": v_gas_2d_out,  # профиль скорости газа v(r,z) [м/с]
+        "v0_gas": v0_axis,      # скорость на оси r=0 [м/с] (верно и при r_inc>0)
         "converged": converged,
         "n_iter": len(residuals),
         "residuals": residuals,
