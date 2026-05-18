@@ -1,0 +1,73 @@
+file,source_full_figure,panel,title
+compare_trends__panel01__Влияние_давления_H_z_0_H_z_R_vs_p.png,plots\regenerated_full\compare_trends.png,1,"Влияние давления
+$H_z(0)/H_z(R)$ vs $p$"
+compare_trends__panel02__Влияние_мощности_j_vs_P_p_нормировано.png,plots\regenerated_full\compare_trends.png,2,"Влияние мощности
+$j_\varphi$ vs $P_p$ (нормировано)"
+compare_trends__panel03__Влияние_расхода_газа_j_vs_G_нормировано.png,plots\regenerated_full\compare_trends.png,3,"Влияние расхода газа
+$j_\varphi$ vs $G$ (нормировано)"
+comparison_model_vs_exp__panel01__Профиль_H_z_r_H_z_R_Рис._2.27_кривая_3_ВЧИ_Ar_G_0_z_-120_мм.png,plots\regenerated_full\comparison_model_vs_exp.png,1,"Профиль $H_z(r)/H_z(R)$
+(Рис. 2.27, кривая 3: ВЧИ, Ar, G=0, $z=-120$ мм)"
+comparison_model_vs_exp__panel02__Профиль_j_r_j_Рис._2.33_кривая_3_ВЧИ_Ar_G_0_z_-120_мм.png,plots\regenerated_full\comparison_model_vs_exp.png,2,"Профиль $j_\varphi(r)/j_{\varphi,\max}$
+(Рис. 2.33, кривая 3: ВЧИ, Ar, G=0, $z=-120$ мм)"
+comparison_model_vs_exp__panel03__n_e_r_z_2D_модель_L_50_мм.png,plots\regenerated_full\comparison_model_vs_exp.png,3,"$n_e(r,z)$ — 2D модель, $L=50$ мм"
+comparison_model_vs_exp__panel04__a_r_z_2D_модель_L_50_мм.png,plots\regenerated_full\comparison_model_vs_exp.png,4,"$\sigma_a(r,z)$ — 2D модель, $L=50$ мм"
+comparison_model_vs_exp__panel05__Осевой_профиль_j_z_j_Рис._2.34_кривая_1_ВЧИ_Ar_G_0.png,plots\regenerated_full\comparison_model_vs_exp.png,5,"Осевой профиль $j_\varphi(z)/j_{\varphi,\max}$
+(Рис. 2.34, кривая 1: ВЧИ, Ar, G=0)"
+fig1_dashboard__panel01__Magnetic_field_H_2_r.png,plots\regenerated_full\fig1_dashboard.png,1,Magnetic field  $|H|^2(r)$
+fig1_dashboard__panel02__Electric_field_E_2_r.png,plots\regenerated_full\fig1_dashboard.png,2,Electric field  $|E|^2(r)$
+fig1_dashboard__panel03__Active_conductivity_a_r.png,plots\regenerated_full\fig1_dashboard.png,3,Active conductivity  $\sigma_a(r)$
+fig1_dashboard__panel04__Electron_density_n_e_r.png,plots\regenerated_full\fig1_dashboard.png,4,Electron density  $n_e(r)$
+fig1_dashboard__panel05__Joule_dissipation_Q_r.png,plots\regenerated_full\fig1_dashboard.png,5,Joule dissipation  $Q(r)$
+fig1_dashboard__panel06__Convergence_history.png,plots\regenerated_full\fig1_dashboard.png,6,Convergence history
+fig1_inclusion_dashboard__panel01__Magnetic_field_H_2_r.png,plots\regenerated_full\fig1_inclusion_dashboard.png,1,Magnetic field  $|H|^2(r)$
+fig1_inclusion_dashboard__panel02__Electric_field_E_2_r.png,plots\regenerated_full\fig1_inclusion_dashboard.png,2,Electric field  $|E|^2(r)$
+fig1_inclusion_dashboard__panel03__Active_conductivity_a_r.png,plots\regenerated_full\fig1_inclusion_dashboard.png,3,Active conductivity  $\sigma_a(r)$
+fig1_inclusion_dashboard__panel04__Electron_density_n_e_r.png,plots\regenerated_full\fig1_inclusion_dashboard.png,4,Electron density  $n_e(r)$
+fig1_inclusion_dashboard__panel05__Joule_dissipation_Q_r.png,plots\regenerated_full\fig1_inclusion_dashboard.png,5,Joule dissipation  $Q(r)$
+fig1_inclusion_dashboard__panel06__Convergence_history.png,plots\regenerated_full\fig1_inclusion_dashboard.png,6,Convergence history
+fig2_inclusion_sigma_norm__panel01__Нормированная_проводимость_0_p_133_Па.png,plots\regenerated_full\fig2_inclusion_sigma_norm.png,1,Нормированная проводимость  $\sigma / \sigma_0$  (p = 133 Па)
+fig2_sigma_norm__panel01__Normalised_conductivity_0.png,plots\regenerated_full\fig2_sigma_norm.png,1,Normalised conductivity  $\sigma / \sigma_0$
+fig3_inclusion_fields__panel01__H_2_r.png,plots\regenerated_full\fig3_inclusion_fields.png,1,$|H|^2(r)$
+fig3_inclusion_fields__panel02__E_2_r.png,plots\regenerated_full\fig3_inclusion_fields.png,2,$|E|^2(r)$
+fig3_inclusion_fields__panel03__a_r.png,plots\regenerated_full\fig3_inclusion_fields.png,3,$\sigma_a(r)$
+fig3_joule__panel01__Joule_dissipation_Q_r_p_133_Pa.png,plots\regenerated_full\fig3_joule.png,1,Joule dissipation  $Q(r)$   (p = 133 Pa)
+fig4_inclusion_joule__panel01__Joule_dissipation_Q_r_p_133_Pa.png,plots\regenerated_full\fig4_inclusion_joule.png,1,Joule dissipation  $Q(r)$   (p = 133 Pa)
+fig4_parametric_R__panel01__Effect_of_tube_radius_on_0_p_133_Pa.png,plots\regenerated_full\fig4_parametric_R.png,1,Effect of tube radius on $\sigma / \sigma_0$   (p = 133 Pa)
+fig5_fields_comparison__panel01__H_2_r.png,plots\regenerated_full\fig5_fields_comparison.png,1,$|H|^2(r)$
+fig5_fields_comparison__panel02__E_2_r.png,plots\regenerated_full\fig5_fields_comparison.png,2,$|E|^2(r)$
+fig5_fields_comparison__panel03__a_r.png,plots\regenerated_full\fig5_fields_comparison.png,3,$\sigma_a(r)$
+fig6_parametric_p__panel01__Effect_of_pressure_on_0_R_12_mm.png,plots\regenerated_full\fig6_parametric_p.png,1,Effect of pressure on $\sigma / \sigma_0$   (R = 12 mm)
+fig7_convergence__panel01__Convergence_of_the_iterative_solver.png,plots\regenerated_full\fig7_convergence.png,1,Convergence of the iterative solver
+figP1_poiseuille_profiles__panel01__Абсолютные_скорости.png,plots\regenerated_full\figP1_poiseuille_profiles.png,1,Абсолютные скорости
+figP1_poiseuille_profiles__panel02__Нормированный_профиль.png,plots\regenerated_full\figP1_poiseuille_profiles.png,2,Нормированный профиль
+figP2_velocity_vs_density__panel01__Профиль_скорости_газа_и_концентрации_плазмы_p_133_Па_R_12_мм_H_wall_2e_05_А_м.png,plots\regenerated_full\figP2_velocity_vs_density.png,1,"Профиль скорости газа и концентрации плазмы
+p = 133 Па,  R = 12 мм,  $H_{wall}$ = 2e+05 А/м"
+figP3_bisection_convergence__panel01__Значение_0_по_шагам.png,plots\regenerated_full\figP3_bisection_convergence.png,1,Значение $\lambda_0$ по шагам
+figP3_bisection_convergence__panel02__Невязка_бисекции_лог._масштаб.png,plots\regenerated_full\figP3_bisection_convergence.png,2,Невязка бисекции (лог. масштаб)
+figP4_lambda_scan__panel01__p_66.5_Па_0.50_Торр.png,plots\regenerated_full\figP4_lambda_scan.png,1,p = 66.5 Па  (0.50 Торр)
+figP4_lambda_scan__panel02__p_133.0_Па_1.00_Торр.png,plots\regenerated_full\figP4_lambda_scan.png,2,p = 133.0 Па  (1.00 Торр)
+figP4_lambda_scan__panel03__p_266.0_Па_2.00_Торр.png,plots\regenerated_full\figP4_lambda_scan.png,3,p = 266.0 Па  (2.00 Торр)
+fig_2d_convergence__panel01__2D_IDR_convergence.png,plots\regenerated_full\fig_2d_convergence.png,1,2D IDR convergence
+fig_2d_dashboard__panel01__H_2_r_z.png,plots\regenerated_full\fig_2d_dashboard.png,1,"$|H|^2$(r, z)"
+fig_2d_dashboard__panel02__E_2_r_z.png,plots\regenerated_full\fig_2d_dashboard.png,2,"$|E|^2$(r, z)"
+fig_2d_dashboard__panel03__a_r_z.png,plots\regenerated_full\fig_2d_dashboard.png,3,"$\sigma_a$(r, z)"
+fig_2d_dashboard__panel04__n_e_r_z.png,plots\regenerated_full\fig_2d_dashboard.png,4,"$n_e$(r, z)"
+fig_2d_inc_dashboard__panel01__H_2_r_z.png,plots\regenerated_full\fig_2d_inc_dashboard.png,1,"$|H|^2$(r, z)"
+fig_2d_inc_dashboard__panel02__E_2_r_z.png,plots\regenerated_full\fig_2d_inc_dashboard.png,2,"$|E|^2$(r, z)"
+fig_2d_inc_dashboard__panel03__a_r_z.png,plots\regenerated_full\fig_2d_inc_dashboard.png,3,"$\sigma_a$(r, z)"
+fig_2d_inc_dashboard__panel04__n_e_r_z.png,plots\regenerated_full\fig_2d_inc_dashboard.png,4,"$n_e$(r, z)"
+fig_2d_inc_fields__panel01__H_2_r.png,plots\regenerated_full\fig_2d_inc_fields.png,1,$|H|^2(r)$
+fig_2d_inc_fields__panel02__E_2_r.png,plots\regenerated_full\fig_2d_inc_fields.png,2,$|E|^2(r)$
+fig_2d_inc_fields__panel03__a_r.png,plots\regenerated_full\fig_2d_inc_fields.png,3,$\sigma_a(r)$
+fig_2d_inc_sigma_norm__panel01__Нормированная_проводимость_0_2D_p_133_Па.png,plots\regenerated_full\fig_2d_inc_sigma_norm.png,1,"Нормированная проводимость  $\sigma / \sigma_0$  (2D, p = 133 Па)"
+fig_2d_midplane__panel01__H_2_A_2_m_2.png,plots\regenerated_full\fig_2d_midplane.png,1,$|H|^2$  [A$^2$/m$^2$]
+fig_2d_midplane__panel02__E_2_V_2_m_2.png,plots\regenerated_full\fig_2d_midplane.png,2,$|E|^2$  [V$^2$/m$^2$]
+fig_2d_midplane__panel03__a_S_m.png,plots\regenerated_full\fig_2d_midplane.png,3,$\sigma_a$  [S/m]
+fig_2d_midplane_detailed__panel01__H.png,plots\regenerated_full\fig_2d_midplane_detailed.png,1,H
+fig_2d_midplane_detailed__panel02__E.png,plots\regenerated_full\fig_2d_midplane_detailed.png,2,E
+fig_2d_midplane_detailed__panel03__sigma_a.png,plots\regenerated_full\fig_2d_midplane_detailed.png,3,sigma_a
+fig_2d_midplane_detailed__panel04__n_e.png,plots\regenerated_full\fig_2d_midplane_detailed.png,4,n_e
+fig_verification_eckert_2d__panel01__Эккерт_однородная_R_0.57_a_3.13e_03_См_м.png,plots\regenerated_full\fig_verification_eckert_2d.png,1,"Эккерт: однородная $\tilde{\sigma}$
+$\delta/R = 0.57$,  $\sigma_a = 3.13e+03$ См/м"
+fig_verification_eckert_2d__panel02__Погрешность_Maxwell-решателя_Эккерт.png,plots\regenerated_full\fig_verification_eckert_2d.png,2,Погрешность Maxwell-решателя (Эккерт)
+fig_verification_eckert_2d__panel03__2D_сходимость_0_2_при_D_a_i_1.png,plots\regenerated_full\fig_verification_eckert_2d.png,3,2D: сходимость $\lambda_0^2$ при $D_a=\nu_i=1$

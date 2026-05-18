@@ -336,6 +336,12 @@ def plot_poiseuille_profiles(save_path):
 
     Nr = 200
     r  = np.linspace(0.0, R_TUBE, Nr + 1)
+    v0_ref = max(
+        poiseuille_velocity(
+            r, sccm_to_kg_s(G_sccm), R_TUBE, P_PA, T_NEUTRAL
+        )[0]
+        for G_sccm in G_sccm_list
+    )
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
     fig.suptitle("Профиль скорости газа. Течение Пуазейля", fontsize=13)
@@ -349,7 +355,7 @@ def plot_poiseuille_profiles(save_path):
         label  = f"G = {G_sccm:.0f} sccm"
 
         ax_abs.plot(r * 1e3, v, color=color, label=label)
-        ax_norm.plot(r * 1e3, v / v0, color=color, label=label)
+        ax_norm.plot(r * 1e3, v / v0_ref, color=color, label=label)
 
     ax_abs.set_xlabel("r, мм")
     ax_abs.set_ylabel("v(r), м/с")
@@ -360,7 +366,7 @@ def plot_poiseuille_profiles(save_path):
     ax_abs.set_ylim(bottom=0)
 
     ax_norm.set_xlabel("r, мм")
-    ax_norm.set_ylabel(r"$v(r)\,/\,v_0$")
+    ax_norm.set_ylabel(r"$v(r)\,/\,v_{0,max}$")
     ax_norm.set_title("Нормированный профиль")
     ax_norm.legend()
     ax_norm.grid(True, alpha=0.3)
@@ -404,6 +410,12 @@ def plot_velocity_vs_density(save_path):
     n_e0  = float(np.max(n_e))
     G_sccm_list = [100.0, 500.0, 2000.0]
     colors = ["#2196F3", "#FF5722", "#4CAF50"]
+    v0_ref = max(
+        poiseuille_velocity(
+            r, sccm_to_kg_s(G_sccm), R_TUBE, P_PA, T_NEUTRAL
+        )[0]
+        for G_sccm in G_sccm_list
+    )
 
     fig, ax = plt.subplots(figsize=(7.5, 5))
 
@@ -416,10 +428,9 @@ def plot_velocity_vs_density(save_path):
     for G_sccm, color in zip(G_sccm_list, colors):
         G_kg_s = sccm_to_kg_s(G_sccm)
         v      = poiseuille_velocity(r, G_kg_s, R_TUBE, P_PA, T_NEUTRAL)
-        v0_val = v[0]
-        ax.plot(r * 1e3, v / v0_val,
+        ax.plot(r * 1e3, v / v0_ref,
                 color=color, ls="--",
-                label=f"$v(r)/v_0$,  G = {G_sccm:.0f} sccm")
+                label=f"$v(r)/v_{{0,max}}$,  G = {G_sccm:.0f} sccm")
 
     ax.set_xlabel("r, мм")
     ax.set_ylabel("Нормированная величина")
